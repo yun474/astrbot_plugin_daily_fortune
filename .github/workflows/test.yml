@@ -20,8 +20,10 @@ jobs:
       - name: 核心测试
         run: python -m pytest -q
       - name: 渲染预览
-        run: python scripts/render_preview.py
+        run: |
+          python scripts/render_preview.py
+          python scripts/render_preview.py --wife-image assets/default_background.jpg --output .test-output/wife-preview.png
       - uses: actions/upload-artifact@v4
         with:
           name: 运势渲染预览
-          path: .test-output/python-preview.png
+          path: .test-output/*preview.png

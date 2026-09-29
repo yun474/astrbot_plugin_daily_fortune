@@ -1,9 +1,13 @@
 import asyncio
+import json
+import os
+import time
 from types import SimpleNamespace as NS
 
 import pytest
 
 from daily_fortune_test.wife import WifeService, parse_catalog, payload_for, send_markdown
+from daily_fortune_test.service import FortuneService, default_avatar
 
 
 def event(request, group=True):
@@ -34,11 +38,16 @@ async def test_selection_survives_restart_and_catalog_change(tmp_path):
 
     service = NS(cache=tmp_path / "cards", config={}, _download=download)
     wife = WifeService(service)
+    assert await wife.original("user", "2026-09-29") is None
     results = await asyncio.gather(*(wife.select("user", "2026-09-29") for _ in range(5)))
     assert all(x == results[0] for x in results)
     assert len(calls) == 1
     (wife.folder / "catalog.json").write_text('[]')
     assert await WifeService(service).select("user", "2026-09-29") == results[0]
+    assert await WifeService(service).original("user", "2026-09-29") == results[0]["url"]
+    assert await wife.original("other", "2026-09-29") is None
+    assert await wife.original("user", "2026-09-30") is None
+    assert len(calls) == 1
 
 
 @pytest.mark.asyncio
@@ -73,3 +82,72 @@ async def test_no_blind_retry(error):
     with pytest.raises(type(error)):
         await send_markdown(event(request), ITEM)
     assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_composite_cache_is_per_user_and_survives_restart(tmp_path):
+    service = FortuneService({}, tmp_path)
+    calls = []
+
+    async def download(url):
+        return default_avatar()
+
+    async def render(html, target):
+        calls.append(html)
+        await asyncio.sleep(0.01)
+        target.write_bytes(default_avatar())
+
+    service._download = download
+    service.renderer.render = render
+    wife = WifeService(service)
+    item = dict(ITEM, day="2026-09-29", name="<角色>&", work="作品<一>")
+    results = await asyncio.gather(*(wife.card("user-a", item, None) for _ in range(4)))
+    assert len(set(results)) == 1 and len(calls) == 1
+    assert "&lt;角色&gt;&amp;" in calls[0] and "作品&lt;一&gt;" in calls[0]
+    assert await WifeService(service).card("user-a", item, None) == results[0]
+    assert await wife.card("user-b", item, None) != results[0]
+    assert len(calls) == 2
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_composite_can_be_retried(tmp_path):
+    service = FortuneService({}, tmp_path)
+
+    async def download(url):
+        return default_avatar()
+
+    async def render(html, target):
+        target.write_bytes(b"incomplete")
+        raise RuntimeError("browser failed")
+
+    service._download = download
+    service.renderer.render = render
+    wife = WifeService(service)
+    with pytest.raises(RuntimeError):
+        await wife.card("user", dict(ITEM, day="2026-09-29"), None)
+    assert not list(service.cache.rglob("*.png"))
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_records_and_temp_files_preserves_catalog(tmp_path):
+    service = FortuneService({"cache_retention_days": 1}, tmp_path)
+    wife = WifeService(service)
+    old = wife.folder / ("a" * 64 + ".json")
+    current = wife.folder / ("b" * 64 + ".json")
+    old.write_text(json.dumps({"day": "2026-09-28"}))
+    current.write_text(json.dumps({"day": "2026-09-29"}))
+    catalog = wife.folder / "catalog.json"
+    catalog.write_text("[]")
+    stale = wife.folder / "catalog.tmp"
+    fresh = wife.folder / ("c" * 64 + ".tmp")
+    for path in (stale, fresh):
+        path.write_text("partial")
+    os.utime(stale, (time.time() - 90000,) * 2)
+    unrelated = wife.folder / "notes.json"
+    unrelated.write_text("{}")
+    await wife.cleanup("2026-09-29")
+    assert not old.exists() and not stale.exists()
+    assert all(path.exists() for path in (current, catalog, fresh, unrelated))
+    await service.close()

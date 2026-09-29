@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 import logging
+import re
 import shutil
 import time
 from datetime import date as Date, timedelta
@@ -13,6 +14,7 @@ from PIL import Image, ImageDraw, ImageOps
 
 from .fortune import draw
 from .renderer import ASSETS, CardRenderer, build_html
+from .settings import number
 
 logger = logging.getLogger("astrbot")
 FALLBACK_QUOTE = ("把今天过好，就是给明天最好的礼物。", "今日寄语", "内置寄语")
@@ -24,7 +26,8 @@ def normalize_image(data: bytes, size=(1600, 1600)) -> bytes:
         if image.width * image.height > 25_000_000:
             raise ValueError("图片尺寸过大")
         image = ImageOps.exif_transpose(image).convert("RGB")
-        image.thumbnail(size)
+        if size is not None:
+            image.thumbnail(size)
         output = io.BytesIO()
         image.save(output, "PNG")
         return output.getvalue()
@@ -43,18 +46,23 @@ def default_avatar() -> bytes:
 class FortuneService:
     def __init__(self, config, data_dir: Path):
         self.config = dict(config)
+        self.retention_days = number(config, "cache_retention_days", 7, 1, 365)
+        self.request_timeout = number(config, "request_timeout_seconds", 15, 5, 120)
         self.cache = (Path(data_dir) / "cards").resolve()
         self.cache.mkdir(parents=True, exist_ok=True)
         self.renderer = CardRenderer(str(config.get("browser_executable_path", "")))
         self._session = None
         self._quote_lock = asyncio.Lock()
         self._last_quote_request = 0.0
-        self._slots = asyncio.Semaphore(2)
+        self._slots = asyncio.Semaphore(number(config, "render_concurrency", 2, 1, 4))
         self._locks = [asyncio.Lock() for _ in range(32)]
         self._cleaned_day = None
         self._cleanup_lock = asyncio.Lock()
         # Layout/settings changes invalidate PNGs, while the daily draw stays stable.
-        fingerprint = hashlib.sha256(json.dumps(self.config, sort_keys=True).encode())
+        visual_config = {key: self.config.get(key) for key in (
+            "background_url", "background_credit", "hitokoto_api", "browser_executable_path"
+        )}
+        fingerprint = hashlib.sha256(json.dumps(visual_config, sort_keys=True).encode())
         for path in (ASSETS / "card.css", ASSETS / "default_background.jpg", Path(__file__).with_name("renderer.py")):
             fingerprint.update(path.read_bytes())
         self._revision = fingerprint.hexdigest()[:12]
@@ -64,7 +72,7 @@ class FortuneService:
             raise ValueError("只支持 HTTP(S) 地址")
         if self._session is None:
             self._session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=self.request_timeout),
                 headers={"User-Agent": "Mozilla/5.0 AstrBot-DailyFortune/0.1"},
                 trust_env=True,
             )
@@ -107,10 +115,10 @@ class FortuneService:
                 if path.stat().st_size > MAX_DOWNLOAD:
                     raise ValueError("本地图片过大")
                 data = await asyncio.to_thread(path.read_bytes)
-            return await asyncio.to_thread(normalize_image, data), str(self.config.get("background_credit", "自定义图片"))[:40]
+            return await asyncio.to_thread(normalize_image, data, None), str(self.config.get("background_credit", "自定义图片"))[:40]
         except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError, Image.DecompressionBombError) as exc:
             logger.warning("今日运势背景获取失败，使用内置插画：%s", type(exc).__name__)
-            return await asyncio.to_thread(normalize_image, (ASSETS / "default_background.jpg").read_bytes()), "妖狐图库"
+            return await asyncio.to_thread(normalize_image, (ASSETS / "default_background.jpg").read_bytes(), None), "妖狐图库"
 
     async def _avatar(self, url):
         if url:
@@ -120,10 +128,10 @@ class FortuneService:
                 logger.warning("今日运势头像获取失败，使用默认头像：%s", type(exc).__name__)
         return default_avatar()
 
-    def _cleanup(self, day: str):
-        if self._cleaned_day == day:
+    def _cleanup(self, day: str, force=False):
+        if self._cleaned_day == day and not force:
             return
-        cutoff = Date.fromisoformat(day) - timedelta(days=7)
+        cutoff = Date.fromisoformat(day) - timedelta(days=self.retention_days - 1)
         for folder in self.cache.iterdir():
             if not folder.is_dir() or folder.is_symlink():
                 continue
@@ -133,7 +141,17 @@ class FortuneService:
                 continue
             if expired and folder.resolve().parent == self.cache:
                 shutil.rmtree(folder)
+            elif folder.resolve().parent == self.cache:
+                for path in folder.glob("*.tmp.png"):
+                    if (re.fullmatch(r"(?:wife-|original-)?[0-9a-f]{64}\.tmp\.png", path.name)
+                            and not path.is_symlink() and path.is_file()
+                            and time.time() - path.stat().st_mtime > 86400):
+                        path.unlink()
         self._cleaned_day = day
+
+    async def cleanup(self, day: str):
+        async with self._cleanup_lock:
+            await asyncio.to_thread(self._cleanup, day, True)
 
     async def card(self, uid: str, day: str, avatar: str | None) -> Path:
         Date.fromisoformat(day)
@@ -149,14 +167,31 @@ class FortuneService:
                 quote, background, portrait = await asyncio.gather(self._quote(), self._background(), self._avatar(avatar))
                 view = draw(uid, day)
                 view.update(quote=quote[0], quote_source=quote[1], quote_credit=quote[2], background_credit=background[1])
-                html = build_html(view, background[0], portrait)
+                reduced = await asyncio.to_thread(normalize_image, background[0])
+                html = build_html(view, reduced, portrait)
                 temporary = target.with_suffix(".tmp.png")
+                original = self._original_path(uid, day)
+                original_temp = original.with_suffix(".tmp.png")
                 try:
                     await self.renderer.render(html, temporary)
+                    await asyncio.to_thread(original_temp.write_bytes, background[0])
+                    original_temp.replace(original)
                     temporary.replace(target)
                 finally:
                     temporary.unlink(missing_ok=True)
+                    original_temp.unlink(missing_ok=True)
                 return target
+
+    def _original_path(self, uid: str, day: str) -> Path:
+        Date.fromisoformat(day)
+        key = hashlib.sha256(uid.encode()).hexdigest()
+        return self.cache / day / f"original-{key}.png"
+
+    async def original(self, uid: str, day: str) -> Path | None:
+        key = hashlib.sha256(f"{self._revision}:{uid}".encode()).hexdigest()
+        async with self._locks[int(key[:2], 16) % len(self._locks)]:
+            path = self._original_path(uid, day)
+            return path if path.is_file() else None
 
     async def close(self):
         try:

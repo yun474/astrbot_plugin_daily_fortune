@@ -5,10 +5,14 @@ import json
 import re
 import time
 from html import escape
+from datetime import date as Date, timedelta
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
 from .avatar import field
+from .renderer import ASSETS, build_wife_html
+from .service import normalize_image
+from .settings import number
 
 
 def parse_catalog(text):
@@ -33,6 +37,37 @@ class WifeService:
         self.folder = service.cache.parent / "wife"
         self.folder.mkdir(exist_ok=True)
         self._lock = asyncio.Lock()
+        self.retention_days = number(service.config, "cache_retention_days", 7, 1, 365)
+        self.catalog_ttl = number(service.config, "wife_catalog_cache_hours", 24, 1, 168) * 3600
+        self._card_revision = hashlib.sha256(
+            (ASSETS / "wife.css").read_bytes()
+            + (ASSETS.parent / "renderer.py").read_bytes()
+        ).hexdigest()
+
+    async def card(self, uid, item, avatar):
+        service = self.service
+        identity = json.dumps([self._card_revision, uid, item, avatar], sort_keys=True)
+        key = hashlib.sha256(identity.encode()).hexdigest()
+        target = service.cache / item["day"] / f"wife-{key}.png"
+        async with service._locks[int(key[:2], 16) % len(service._locks)]:
+            if target.is_file():
+                return target
+            async with service._slots:
+                async with service._cleanup_lock:
+                    await asyncio.to_thread(service._cleanup, item["day"])
+                target.parent.mkdir(parents=True, exist_ok=True)
+                picture, portrait = await asyncio.gather(
+                    service._download(item["url"]), service._avatar(avatar)
+                )
+                picture = await asyncio.to_thread(normalize_image, picture)
+                html = build_wife_html(item, picture, portrait)
+                temporary = target.with_suffix(".tmp.png")
+                try:
+                    await service.renderer.render(html, temporary)
+                    temporary.replace(target)
+                finally:
+                    temporary.unlink(missing_ok=True)
+                return target
 
     async def select(self, uid, day):
         key = hashlib.sha256(uid.encode()).hexdigest()
@@ -43,7 +78,7 @@ class WifeService:
                 if saved["day"] == day:
                     return saved
             catalog_file = self.folder / "catalog.json"
-            if not catalog_file.exists() or time.time() - catalog_file.stat().st_mtime > 86400:
+            if not catalog_file.exists() or time.time() - catalog_file.stat().st_mtime > self.catalog_ttl:
                 url = self.service.config.get("wife_list_url", "https://animewife.dpdns.org/list.txt")
                 try:
                     catalog = parse_catalog((await self.service._download(url, 2 * 1024 * 1024)).decode("utf-8-sig"))
@@ -67,6 +102,37 @@ class WifeService:
         temp = path.with_suffix(".tmp")
         temp.write_text(json.dumps(data, ensure_ascii=False), "utf-8")
         temp.replace(path)
+
+    async def original(self, uid, day):
+        key = hashlib.sha256(uid.encode()).hexdigest()
+        async with self._lock:
+            path = self.folder / f"{key}.json"
+            if not path.is_file():
+                return None
+            item = json.loads(path.read_text("utf-8"))
+            return item["url"] if item["day"] == day else None
+
+    async def cleanup(self, day):
+        async with self._lock:
+            await asyncio.to_thread(self._cleanup, day)
+
+    def _cleanup(self, day):
+        cutoff = Date.fromisoformat(day) - timedelta(days=self.retention_days - 1)
+        for path in self.folder.iterdir():
+            if path.is_symlink() or not path.is_file():
+                continue
+            if re.fullmatch(r"[0-9a-f]{64}\.json", path.name):
+                try:
+                    item = json.loads(path.read_text("utf-8"))
+                    expired = Date.fromisoformat(item["day"]) < cutoff
+                except (ValueError, KeyError, TypeError):
+                    # Broken plugin records are removed only after the retention window.
+                    expired = Date.fromtimestamp(path.stat().st_mtime) < cutoff
+                if expired:
+                    path.unlink()
+            elif re.fullmatch(r"(?:[0-9a-f]{64}|catalog)\.tmp", path.name):
+                if time.time() - path.stat().st_mtime > 86400:
+                    path.unlink()
 
 
 def md_text(value):

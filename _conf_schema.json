@@ -27,12 +27,48 @@
     "description": "今日老婆角色列表 URL",
     "type": "string",
     "default": "https://animewife.dpdns.org/list.txt",
-    "hint": "每行一个图片相对路径，格式：目录/作品!角色名.jpg；缓存一天。"
+    "hint": "每行一个图片相对路径，格式：目录/作品!角色名.jpg；刷新周期由 wife_catalog_cache_hours 设置。"
   },
   "wife_image_base": {
     "description": "今日老婆图片公网基础地址",
     "type": "string",
     "default": "https://raw.githubusercontent.com/monbed/wife/main/",
     "hint": "QQ 后台需要能访问此地址；可改为自建图床或镜像，路径须与列表对应。"
+  },
+  "qq_wife_markdown": {
+    "description": "QQ 官方今日老婆使用 Markdown",
+    "type": "bool",
+    "default": true,
+    "hint": "开启时群聊和私聊发送 Markdown 与快捷按钮；关闭后发送包含头像和角色信息的合成图，需要安装浏览器。"
+  },
+  "cache_retention_days": {
+    "description": "缓存保留天数（包含今天）",
+    "type": "int",
+    "default": 7,
+    "hint": "范围 1～365。统一清理过期运势卡、运势原图、老婆合成图和角色记录；设为 1 时只保留今天。"
+  },
+  "cache_cleanup_interval_hours": {
+    "description": "缓存清理间隔（小时）",
+    "type": "int",
+    "default": 6,
+    "hint": "范围 1～168。插件启动时立即清理一次，之后按此间隔清理，无人使用时也会执行。"
+  },
+  "wife_catalog_cache_hours": {
+    "description": "老婆角色列表缓存时间（小时）",
+    "type": "int",
+    "default": 24,
+    "hint": "范围 1～168。列表过期后在下次需要抽取角色时刷新，不改变当天已抽到的角色。"
+  },
+  "request_timeout_seconds": {
+    "description": "图源和一言请求超时（秒）",
+    "type": "int",
+    "default": 15,
+    "hint": "范围 5～120。用于插件下载背景、头像、角色图、角色列表和一言；不控制 QQ 平台自身的发送超时。"
+  },
+  "render_concurrency": {
+    "description": "图片生成最大并发数",
+    "type": "int",
+    "default": 2,
+    "hint": "范围 1～4。运势卡与老婆合成图共用此限制，内存较小的服务器建议设为 1。"
   }
 }

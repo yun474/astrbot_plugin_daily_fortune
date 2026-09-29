@@ -40,6 +40,20 @@ def build_html(view: dict, background: bytes, avatar: bytes) -> str:
 <span>仅供娱乐</span></footer></main></article></html>'''
 
 
+def build_wife_html(item: dict, picture: bytes, avatar: bytes) -> str:
+    css = (ASSETS / "wife.css").read_text("utf-8")
+    source = image_uri(picture)
+    return f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">
+<title>今日老婆</title><style>{css}</style><article id="card">
+<img class="art" src="{source}" alt="角色插画">
+<section class="info"><img class="wash" src="{source}" alt="">
+<img class="avatar" src="{image_uri(avatar)}" alt="用户头像">
+<div class="copy"><div class="label">今日老婆</div>
+<h1>{escape(item['name'])}</h1><p class="work">作品 · {escape(item['work'])}</p></div>
+</section></article></html>'''
+
+
 class CardRenderer:
     def __init__(self, executable: str = ""):
         self.executable = executable

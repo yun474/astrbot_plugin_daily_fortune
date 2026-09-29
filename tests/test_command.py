@@ -1,4 +1,5 @@
 import importlib
+import asyncio
 import sys
 from types import ModuleType, SimpleNamespace as NS
 
@@ -36,6 +37,8 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
     plugin = module.DailyFortune(None, {})
     assert ("今日运势", {"jrys", "运势"}) in commands
     assert ("今日老婆", {"jrlp", "抽老婆"}) in commands
+    assert ("运势原图", set()) in commands
+    assert ("老婆原图", set()) in commands
     event = NS(
         get_platform_id=lambda: "official-1",
         get_platform_name=lambda: "qq_official",
@@ -78,7 +81,67 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
     assert [x async for x in plugin.daily_wife(event)] == []
     assert sent[0]["work"] == "原神"
     event.get_platform_name = lambda: "aiocqhttp"
+    event.get_sender_id = lambda: "123456"
+
+    async def wife_card(uid, item, avatar):
+        assert uid == "official-1:123456"
+        assert item["name"] == "芙宁娜"
+        assert avatar == "https://q1.qlogo.cn/g?b=qq&nk=123456&s=100"
+        return tmp_path / "wife.png"
+
+    plugin.wife.card = wife_card
     result = [x async for x in plugin.daily_wife(event)]
-    assert result[0] == ("plain", "您的今日老婆是：芙宁娜\n作品：原神")
-    assert result[1] == ("image", "https://example.com/wife.jpg")
+    assert result == [("image", str(tmp_path / "wife.png"))]
+    event.get_platform_name = lambda: "qq_official"
+    event.message_obj.raw_message.author.member_openid = "123456"
+    plugin.qq_wife_markdown = False
+
+    async def official_card(uid, item, avatar):
+        return tmp_path / "wife.png"
+
+    plugin.wife.card = official_card
+    assert [x async for x in plugin.daily_wife(event)] == [("image", str(tmp_path / "wife.png"))]
+    assert len(sent) == 1
+    plugin.wife.card = fail
+    result = [x async for x in plugin.daily_wife(event)]
+    assert len(result) == 1 and result[0][0] == "plain"
+    assert "芙宁娜" in result[0][1] and "图片生成失败" in result[0][1]
+
+    original_calls = []
+
+    async def original(uid, day):
+        original_calls.append(uid)
+        return tmp_path / "original.png"
+
+    plugin.service.original = plugin.wife.original = original
+    event.get_platform_name = lambda: "qq_official"
+    event.message_obj.raw_message = {"content": '<@BOT> /运势原图 <qqbot-at-user id="OTHER" />'}
+    event.message_obj.self_id = "BOT"
+    assert [x async for x in plugin.fortune_original(event)] == [("image", str(tmp_path / "original.png"))]
+    assert original_calls[-1] == "official-1:OTHER"
+    event.message_obj.raw_message = {"content": '<@BOT> /老婆原图'}
+    assert [x async for x in plugin.wife_original(event)] == [("image", str(tmp_path / "original.png"))]
+    assert original_calls[-1] == "official-1:123456"
+
+    async def missing(*args):
+        return None
+
+    plugin.wife.original = missing
+    assert [x async for x in plugin.wife_original(event)] == []
+    plugin.service.original = fail
+    assert [x async for x in plugin.fortune_original(event)] == []
+    sweeps = []
+    completed = asyncio.Event()
+
+    async def cleanup(day):
+        sweeps.append(day)
+        if len(sweeps) >= 4:
+            completed.set()
+
+    plugin.service.cleanup = plugin.wife.cleanup = cleanup
+    plugin.cleanup_interval = 0.01
+    await plugin.initialize()
+    assert len(sweeps) == 2  # Startup, before any new request.
+    await asyncio.wait_for(completed.wait(), timeout=1)
     await plugin.terminate()
+    assert plugin._cleanup_task.done()
