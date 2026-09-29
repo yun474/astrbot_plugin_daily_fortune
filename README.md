@@ -67,7 +67,7 @@ apt-get update && apt-get install -y fonts-noto-cjk
 运行测试和离线模板预览：
 
 ```bash
-python -m pip install pytest pytest-asyncio qq-botpy
+python -m pip install -r requirements-dev.txt
 python -m pytest -q
 python scripts/render_preview.py
 # 如果使用系统浏览器：
