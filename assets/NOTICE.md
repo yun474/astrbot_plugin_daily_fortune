@@ -5,5 +5,6 @@
 - `default_background.jpg`：2026-09-29 从妖狐普通二次元图片 API 获取，原始尺寸 2400×1350。[服务说明](https://acg.yaohud.cn/) 将使用范围限定为非商业用途；原作者版权保留，接口没有返回原作者署名。商业使用请替换为有明确授权的图片。
 - `../docs/preview.png`：经用户确认的原型预览，包含上述插画及用户 `yun474` 的公开 GitHub 头像；仅用于展示效果。插件不会获取或默认使用该用户头像。
 - 默认头像由插件绘制为通用人像图标。
+- `../docs/wife-preview.png`：今日老婆布局预览，芙宁娜原图来自 [monbed/wife](https://github.com/monbed/wife) 的 `img2/原神!芙宁娜.jpg`，保留原画签名；图中头像为 yun474 的公开 GitHub 演示头像。第三方插画版权归原作者，不以本项目 MIT 许可重新授权。
 
 更换背景时，请同时设置 `background_credit`。接口失败时的内置图片仍标注“妖狐图库”。

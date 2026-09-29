@@ -22,5 +22,17 @@
     "type": "string",
     "default": "",
     "hint": "留空使用 Playwright 安装的 Chromium。"
+  },
+  "wife_list_url": {
+    "description": "今日老婆角色列表 URL",
+    "type": "string",
+    "default": "https://animewife.dpdns.org/list.txt",
+    "hint": "每行一个图片相对路径，格式：目录/作品!角色名.jpg；缓存一天。"
+  },
+  "wife_image_base": {
+    "description": "今日老婆图片公网基础地址",
+    "type": "string",
+    "default": "https://raw.githubusercontent.com/monbed/wife/main/",
+    "hint": "QQ 后台需要能访问此地址；可改为自建图床或镜像，路径须与列表对应。"
   }
 }

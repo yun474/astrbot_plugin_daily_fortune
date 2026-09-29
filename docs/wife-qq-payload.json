@@ -1,0 +1,53 @@
+{
+  "msg_type": 2,
+  "msg_id": "收到的消息ID",
+  "msg_seq": 1,
+  "markdown": {
+    "content": "<qqbot-at-user id=\"用户的member_openid\" />\n您的今日老婆是：**芙宁娜**\n作品：原神\n![芙宁娜 #485px #640px](https://raw.githubusercontent.com/monbed/wife/main/img2/%E5%8E%9F%E7%A5%9E%21%E8%8A%99%E5%AE%81%E5%A8%9C.jpg)\n"
+  },
+  "force_verify_image_resource": true,
+  "keyboard": {
+    "content": {
+      "rows": [
+        {
+          "buttons": [
+            {
+              "id": "wife",
+              "render_data": {
+                "label": "今日老婆",
+                "visited_label": "今日老婆",
+                "style": 1
+              },
+              "action": {
+                "type": 2,
+                "permission": {
+                  "type": 2
+                },
+                "data": "今日老婆",
+                "enter": true,
+                "unsupport_tips": "请手动发送今日老婆"
+              }
+            },
+            {
+              "id": "fortune",
+              "render_data": {
+                "label": "今日运势",
+                "visited_label": "今日运势",
+                "style": 1
+              },
+              "action": {
+                "type": 2,
+                "permission": {
+                  "type": 2
+                },
+                "data": "今日运势",
+                "enter": true,
+                "unsupport_tips": "请手动发送今日运势"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

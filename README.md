@@ -1,4 +1,4 @@
-# 今日运势
+# 今日运势与今日老婆
 
 给群友抽一张当天的运势卡：头像、二次元插画、吉凶、宜忌和一言。文字区是半透明面板，不显示昵称，也没有签到、经验、等级或货币。
 
@@ -67,7 +67,7 @@ apt-get update && apt-get install -y fonts-noto-cjk
 运行测试和离线模板预览：
 
 ```bash
-python -m pip install pytest pytest-asyncio
+python -m pip install pytest pytest-asyncio qq-botpy
 python -m pytest -q
 python scripts/render_preview.py
 # 如果使用系统浏览器：
@@ -82,3 +82,25 @@ python scripts/render_preview.py --browser /usr/bin/chromium
 - [一言](https://developer.hitokoto.cn/sentence/)：公益接口，默认全球线路限 2 QPS；请勿高频调用。单用户当日成图会缓存，一言请求额外限制为至少间隔 0.55 秒。
 - [妖狐图库](https://acg.yaohud.cn/)：默认使用普通二次元接口，服务方声明全年龄、免费非商业用途。免费接口可用性不作保证。
 - 代码为 MIT；第三方插画和预览图单独说明于 [图片来源](assets/NOTICE.md)，不随代码重新授权。商业场景请替换成有明确授权的素材。
+
+
+## 今日老婆
+
+同一个插件新增 `/今日老婆`（别名 `/jrlp`、`/抽老婆`），原有今日运势命令不变。
+
+QQ 官方群聊、私聊及对应 Webhook 直接发送 Markdown：开头艾特触发用户，显示“您的今日老婆是：角色名”、作品名和公网原图，底部两个按钮为“今日老婆”“今日运势”。按钮不带斜杠、唤醒词或手工艾特，QQ 自动艾特机器人。
+
+- 使用 [monbed/wife 免费图库](https://github.com/monbed/wife)，列表缓存一天，同一用户当天固定角色；已抽结果跨重启保留，列表刷新不会影响当天结果。
+- `wife_list_url` 配置角色列表，`wife_image_base` 配置图片公网基础地址。默认 GitHub 原图，QQ 拉取不稳定时可切换到同路径的自建图床或镜像。
+- 请求顶层开启 `force_verify_image_resource=true`。明确的图片下载、转存、校验失败等待一秒重试一次；不重新抽取。权限错误、未知错误及超时不盲目重试。
+- 原生 Markdown 不合成头像、不查询昵称。OneBot 和频道场景发送普通文字（角色及作品）和原图。
+- 沿用原插件名及缓存目录，方便已安装用户直接更新。版本保持 `0.1.0`。
+- QQ SDK 随 AstrBot 官方适配器提供。直接调用其已鉴权 HTTP 客户端，透传图片校验和按钮字段。
+
+下面保留此前确认的合成图预览，供普通图片样式参考；QQ 原生 Markdown 的实际布局由客户端渲染，当前普通图片发送的是原图。
+
+![今日老婆合成预览](docs/wife-preview.png)
+
+[原生 Markdown 请求示例](docs/wife-qq-payload.json) · [发送与重试说明](docs/wife-qq-send.md)
+
+本地测试验证群聊/私聊路由、按钮内容、强制图片校验、一次重试和每日缓存，真实 QQ 消息仍需部署后验收。
