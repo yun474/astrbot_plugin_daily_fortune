@@ -1,0 +1,11 @@
+name: astrbot_plugin_daily_fortune
+display_name: 今日运势
+desc: 头像、二次元插画、一言和每日吉凶宜忌，支持 QQ 官方机器人，无签到与经验系统。
+version: 0.1.0
+author: yun474
+repo: https://github.com/yun474/astrbot_plugin_daily_fortune
+astrbot_version: ">=3.5.3"
+support_platforms:
+  - qq_official
+  - qq_official_webhook
+  - aiocqhttp

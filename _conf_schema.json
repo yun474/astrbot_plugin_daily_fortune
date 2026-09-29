@@ -1,0 +1,26 @@
+{
+  "background_url": {
+    "description": "二次元背景图地址或本地图片路径",
+    "type": "string",
+    "default": "https://acg.yaohud.cn/dm/acg.php",
+    "hint": "使用直接返回图片的 URL；本地路径相对于插件目录。默认公益图库仅限非商业用途。"
+  },
+  "background_credit": {
+    "description": "背景图来源标注",
+    "type": "string",
+    "default": "妖狐图库",
+    "hint": "更换自有图片后请修改这里。"
+  },
+  "hitokoto_api": {
+    "description": "一言接口",
+    "type": "string",
+    "default": "https://v1.hitokoto.cn/?c=a&c=b&max_length=32",
+    "hint": "兼容一言 JSON 格式，留空使用内置句子。"
+  },
+  "browser_executable_path": {
+    "description": "Chrome / Chromium 可执行文件路径",
+    "type": "string",
+    "default": "",
+    "hint": "留空使用 Playwright 安装的 Chromium。"
+  }
+}
