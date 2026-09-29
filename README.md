@@ -13,7 +13,7 @@
 
 ![今日运势预览](docs/preview.png)
 
-运势卡会使用发送者的头像，图中为演示头像。
+上图由当前插件模板实际渲染：信息区约占画面 33%～36%，其余空间展示背景。运势卡会使用发送者的头像，图中为演示头像。
 
 开启今日老婆 MD 模式后，QQ 官方群聊、私聊中的消息内容如下，图片与按钮的外观由 QQ 客户端呈现：
 
@@ -28,6 +28,20 @@
 > 要好好对她哦~
 >
 > 【今日老婆】　【今日运势】
+
+今日运势 MD 使用同样的按钮，内容如下：
+
+> @用户
+>
+> 今日运势
+>
+> （上方紧凑布局的完整运势卡）
+>
+> 请勿迷信，仅供参考
+>
+> 【今日老婆】　【今日运势】
+
+以上是内容示意，并非 QQ 客户端截图。实际图片语法包含上传图片的真实宽高，例如 `![图片 #800px #1200px](https://img.example.com/fortune.jpg)`。完整请求体示例：[老婆 MD](docs/wife-qq-payload.json) · [运势 MD](docs/fortune-qq-payload.json)。
 
 非 Markdown 场景发送合成图：完整角色插画下方配有半透明信息栏，展示用户头像、角色名和作品名。
 
@@ -87,7 +101,7 @@ Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤�
 
 两项功能默认发送合成图。QQ 官方群聊和私聊可分别开启 `qq_fortune_markdown`（今日运势）和 `qq_wife_markdown`（今日老婆）：消息开头 @发送者，并提供两个快捷按钮。OneBot 和频道场景仍发送合成图。
 
-两项功能均不查询昵称。运势卡和今日老婆合成图只获取用户头像；老婆 MD 展示角色原图，运势 MD 展示完整运势卡。
+两项功能均不查询昵称。运势卡和今日老婆合成图只获取用户头像；老婆 MD 展示角色插画的压缩副本，运势 MD 展示完整运势卡。获取未经 MD 压缩的角色图片请用 `/老婆原图`。
 
 老婆 MD 结尾为「要好好对她哦~」，运势 MD 结尾为「请勿迷信，仅供参考」，均使用引用格式。完整消息示例：[今日老婆](docs/wife-qq-markdown.md) · [今日运势](docs/fortune-qq-markdown.md)。
 
@@ -149,6 +163,8 @@ Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤�
 
 #### Cloudflare R2 填写示例
 
+在下拉列表选择 `Cloudflare R2` 后，展开对应分组填写以下字段。JSON 配置中它们位于 `image_host.r2`；类型选择和重试、超时仍位于 `image_host`。
+
 | 配置项 | 示例 / 说明 |
 | --- | --- |
 | `provider` | 下拉选择 `Cloudflare R2` |
@@ -161,6 +177,31 @@ Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤�
 | `addressing_style` | 保持 `auto` |
 
 最终图片地址形如 `https://img.example.com/daily-fortune/2026-09-29/<图片哈希>.jpg`。公网基础地址应指向桶根目录，不要再次附加路径前缀。上传端点用于签名写入，不能代替图片公网地址。参考 [R2 S3 接入文档](https://developers.cloudflare.com/r2/examples/aws/boto3/) 与 [公开访问配置](https://developers.cloudflare.com/r2/buckets/public-buckets/)；`r2.dev` 用于开发测试，生产使用自定义域名。
+
+配置片段示例（合并到现有配置，替换占位值）：
+
+```json
+{
+  "qq_wife_markdown": true,
+  "qq_fortune_markdown": true,
+  "show_image_host": true,
+  "image_host": {
+    "provider": "Cloudflare R2",
+    "r2": {
+      "endpoint": "https://ACCOUNT_ID.r2.cloudflarestorage.com",
+      "bucket": "bot-images",
+      "access_key_id": "YOUR_ACCESS_KEY_ID",
+      "secret_access_key": "YOUR_SECRET_ACCESS_KEY",
+      "region": "",
+      "public_base_url": "https://img.example.com",
+      "key_prefix": "daily-fortune",
+      "addressing_style": "auto"
+    },
+    "retry_count": 3,
+    "timeout_seconds": 30
+  }
+}
+```
 
 #### 其他对象存储
 
@@ -229,7 +270,9 @@ img2/原神!芙宁娜.jpg
 
 MD 模式下请确认图床上传成功，返回的是公开图片直链而非预览网页，并检查 QQ 服务器是否能访问它。若机器人本身无法下载 GitHub 角色原图，可以将 `wife_image_base` 改为同路径镜像。
 
-插件已启用图片资源校验，默认失败后最多重试 3 次，可在图床配置中修改；失败后会保留当天角色，不会重新抽取。具体错误请查看 AstrBot 日志中的「今日老婆 Markdown 发送失败」记录。
+插件已启用图片资源校验，明确的图片资源失败默认最多重试 3 次，可在图床配置中修改；失败后会保留当天角色，不会重新抽取。日志会依次记录上传图片字节数、取得图床地址、开始 QQ 请求和平台返回结果，失败时标出「下载原图」「压缩图片」「图床上传」或「QQ 发送」阶段。
+
+QQ 请求超过 35 秒将报超时且不自动重发。取得图床地址只表示上传完成或命中缓存；平台返回消息 ID 只表示接收消息，都不能代替客户端实际图片展示检查。图片只显示「图片」文字时，请先更新至包含图片宽高标记的版本，再核对公开图片地址能否直接打开。
 
 ### 为什么重复发送命令，结果没有变化？
 
@@ -247,5 +290,3 @@ MD 模式下请确认图床上传成功，返回的是公开图片直链而非�
 - [monbed/wife](https://github.com/monbed/wife)：今日老婆角色图库。
 
 第三方插画版权归原作者，不随代码以 MIT 许可重新授权；图片与预览素材说明见 [图片来源](assets/NOTICE.md)。
-
-MD 排错：日志会依次记录上传图片字节数、取得图床地址、开始 QQ 请求和发送结果。取得图床地址不代表 QQ 已能拉取该图片。QQ 请求超过 35 秒将报超时且不自动重发；失败提示会标出阶段，请结合 QQ 返回错误判断。
