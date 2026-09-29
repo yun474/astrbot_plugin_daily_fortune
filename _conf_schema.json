@@ -36,10 +36,10 @@
     "hint": "QQ 后台需要能访问此地址；可改为自建图床或镜像，路径须与列表对应。"
   },
   "qq_wife_markdown": {
-    "description": "QQ 官方今日老婆使用 Markdown",
+    "description": "今日老婆：MD 模式",
     "type": "bool",
-    "default": true,
-    "hint": "开启时群聊和私聊发送 Markdown 与快捷按钮；关闭后发送包含头像和角色信息的合成图，需要安装浏览器。"
+    "default": false,
+    "hint": "QQ 官方群聊和私聊使用 Markdown 与按钮；开启前必须配置图床。关闭后发送合成图。"
   },
   "cache_retention_days": {
     "description": "缓存保留天数（包含今天）",
@@ -70,5 +70,63 @@
     "type": "int",
     "default": 2,
     "hint": "范围 1～4。运势卡与老婆合成图共用此限制，内存较小的服务器建议设为 1。"
+  },
+  "qq_fortune_markdown": {
+    "description": "今日运势：MD 模式",
+    "type": "bool",
+    "default": false,
+    "hint": "QQ 官方群聊和私聊先上传运势卡到图床，再发送 Markdown 与按钮；开启前必须配置图床。"
+  },
+  "show_image_host": {
+    "description": "展开图床配置",
+    "type": "bool",
+    "default": false,
+    "hint": "展开或收起下方图床设置，仅影响配置页显示，不影响已保存配置。"
+  },
+  "image_host": {
+    "description": "图床配置（两个 MD 模式共用）",
+    "type": "object",
+    "condition": {
+      "show_image_host": true
+    },
+    "hint": "使用 multipart/form-data POST 上传接口，默认字段兼容兰空 V2。需返回公网可访问的图片直链。",
+    "items": {
+      "upload_url": {
+        "description": "上传 API 地址",
+        "type": "string",
+        "default": "",
+        "hint": "完整接口地址，例如 https://你的图床/api/v1/upload；不要填网页地址。"
+      },
+      "authorization": {
+        "description": "Authorization 鉴权值",
+        "type": "string",
+        "default": "",
+        "hint": "例如 Bearer 你的Token；匿名上传可留空。不要填写到日志或公开截图中。"
+      },
+      "file_field": {
+        "description": "上传文件字段名",
+        "type": "string",
+        "default": "file",
+        "hint": "按图床接口填写，兰空 V2 为 file。"
+      },
+      "url_path": {
+        "description": "响应图片地址 JSON 路径",
+        "type": "string",
+        "default": "data.links.url",
+        "hint": "例如 data.links.url 或 data.url；支持用数字访问数组，如 data.0.url。"
+      },
+      "retry_count": {
+        "description": "失败后重试次数",
+        "type": "int",
+        "default": 3,
+        "hint": "范围 0～10，不含首次请求。用于图床网络错误、429/5xx，以及 QQ 明确的图片资源失败；0 表示不重试。"
+      },
+      "timeout_seconds": {
+        "description": "图床上传超时（秒）",
+        "type": "int",
+        "default": 30,
+        "hint": "范围 5～120，每次上传请求的超时。"
+      }
+    }
   }
 }

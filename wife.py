@@ -140,12 +140,15 @@ def md_text(value):
     return re.sub(r"([\\`*_{}\[\]()#+.!|>~-])", r"\\\1", escape(value))
 
 
-def payload_for(event, item):
-    content = (
-        f'<qqbot-at-user id="{escape(str(event.get_sender_id()), quote=True)}" />\n'
+def payload_for(event, item, fortune=False):
+    details = "今日运势\n" if fortune else (
         f"您的今日老婆是：**{md_text(item['name'])}**\n"
         f"作品：{md_text(item['work'])}\n"
-        f"![角色图片]({item['url']})\n"
+    )
+    image_url = item['url'].replace('(', '%28').replace(')', '%29')
+    content = (
+        f'<qqbot-at-user id="{escape(str(event.get_sender_id()), quote=True)}" />\n'
+        + details + f"![图片]({image_url})\n"
     )
     buttons = [{
         "id": key,
@@ -166,7 +169,14 @@ def image_failure(error):
             and any(word in text for word in ("fail", "error", "失败", "不可用")))
 
 
-async def send_markdown(event, item):
+def supports_markdown(event):
+    if event.get_platform_name() not in {"qq_official", "qq_official_webhook"}:
+        return False
+    raw = event.message_obj.raw_message
+    return bool(field(raw, "group_openid") or field(field(raw, "author"), "user_openid"))
+
+
+async def send_markdown(event, item, retries=3, fortune=False):
     from botpy.http import Route
 
     raw = event.message_obj.raw_message
@@ -177,8 +187,8 @@ async def send_markdown(event, item):
         route = Route("POST", "/v2/users/{openid}/messages", openid=event.get_sender_id())
     else:
         return False  # Channel events use ordinary image delivery.
-    payload = payload_for(event, item)
-    for attempt in range(2):
+    payload = payload_for(event, item, fortune)
+    for attempt in range(retries + 1):
         try:
             result = await event.bot.api._http.request(route, json=payload)
             if not isinstance(result, dict):
@@ -189,7 +199,7 @@ async def send_markdown(event, item):
                 raise RuntimeError("QQ 未返回消息 ID，发送结果不明")
             return True
         except Exception as exc:
-            if attempt or not image_failure(exc):
+            if attempt >= retries or not image_failure(exc):
                 raise
             await asyncio.sleep(1)
     return False

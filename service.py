@@ -142,6 +142,11 @@ class FortuneService:
             if expired and folder.resolve().parent == self.cache:
                 shutil.rmtree(folder)
             elif folder.resolve().parent == self.cache:
+                for path in folder.glob("host-*.tmp"):
+                    if (re.fullmatch(r"host-[0-9a-f]{64}\.tmp", path.name)
+                            and not path.is_symlink() and path.is_file()
+                            and time.time() - path.stat().st_mtime > 86400):
+                        path.unlink()
                 for path in folder.glob("*.tmp.png"):
                     if (re.fullmatch(r"(?:wife-|original-)?[0-9a-f]{64}\.tmp\.png", path.name)
                             and not path.is_symlink() and path.is_file()

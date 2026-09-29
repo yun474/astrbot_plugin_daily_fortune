@@ -11,7 +11,9 @@ from .fortune import draw, text_result, today
 from .service import FortuneService
 from .targets import target_user
 from .settings import number
-from .wife import WifeService, send_markdown
+from .hosting import ImageHost
+from .service import normalize_image
+from .wife import WifeService, send_markdown, supports_markdown
 
 logger = logging.getLogger("astrbot")
 
@@ -27,7 +29,9 @@ class DailyFortune(Star):
             config, StarTools.get_data_dir("astrbot_plugin_daily_fortune")
         )
         self.wife = WifeService(self.service)
-        self.qq_wife_markdown = bool(config.get("qq_wife_markdown", True))
+        self.qq_wife_markdown = bool(config.get("qq_wife_markdown", False))
+        self.qq_fortune_markdown = bool(config.get("qq_fortune_markdown", False))
+        self.image_host = ImageHost(self.service)
         self.cleanup_interval = number(config, "cache_cleanup_interval_hours", 6, 1, 168) * 3600
         self._cleanup_task = None
 
@@ -57,13 +61,17 @@ class DailyFortune(Star):
             logger.exception("今日老婆角色获取失败")
             yield event.plain_result("角色图库暂时无法读取，请稍后再试。")
             return
-        if self.qq_wife_markdown and event.get_platform_name() in {"qq_official", "qq_official_webhook"}:
+        if self.qq_wife_markdown and supports_markdown(event):
             try:
-                if await send_markdown(event, item):
+                self.image_host.validate()
+                picture = await self.service._download(item["url"])
+                picture = await asyncio.to_thread(normalize_image, picture, None)
+                url = await self.image_host.upload(picture, today())
+                if await send_markdown(event, dict(item, url=url), retries=self.image_host.retries):
                     return
             except Exception:
                 logger.exception("今日老婆 Markdown 发送失败")
-                yield event.plain_result("今日老婆图片消息发送失败，请稍后重试；当天角色已保留。")
+                yield event.plain_result("今日老婆 MD 发送失败，请检查图床配置或稍后重试；当天角色已保留。")
                 return
         try:
             image = await self.wife.card(uid, item, avatar_url(event))
@@ -84,6 +92,15 @@ class DailyFortune(Star):
             logger.exception("今日运势图片生成失败，请检查浏览器和字体配置")
             yield event.plain_result(text_result(draw(uid, date)))
             return
+        if self.qq_fortune_markdown and supports_markdown(event):
+            try:
+                data = await asyncio.to_thread(image.read_bytes)
+                url = await self.image_host.upload(data, date)
+                await send_markdown(event, {"url": url}, retries=self.image_host.retries, fortune=True)
+            except Exception:
+                logger.exception("今日运势 Markdown 发送失败")
+                yield event.plain_result("今日运势 MD 发送失败，请检查图床配置或稍后重试。")
+            return
         yield event.image_result(str(image))
 
     async def terminate(self):
@@ -91,7 +108,10 @@ class DailyFortune(Star):
             self._cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await self._cleanup_task
-        await self.service.close()
+        try:
+            await self.image_host.close()
+        finally:
+            await self.service.close()
 
     @filter.command("运势原图", alias=set())
     async def fortune_original(self, event: AstrMessageEvent):

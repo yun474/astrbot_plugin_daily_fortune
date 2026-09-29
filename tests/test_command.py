@@ -2,6 +2,7 @@ import importlib
 import asyncio
 import sys
 from types import ModuleType, SimpleNamespace as NS
+from daily_fortune_test.service import default_avatar
 
 import pytest
 
@@ -72,14 +73,45 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
 
     sent = []
 
-    async def send_md(event, item):
+    async def send_md(event, item, **kwargs):
         sent.append(item)
         return True
 
     plugin.wife.select = select
+    plugin.qq_wife_markdown = True
+    event.message_obj.raw_message.group_openid = "GROUP"
+    uploads = []
+
+    async def download(url):
+        return default_avatar()
+
+    async def upload(data, day):
+        uploads.append(data)
+        return "https://host.example.com/image.png"
+
+    plugin.service._download = download
+    plugin.image_host.validate = lambda: None
+    plugin.image_host.upload = upload
     monkeypatch.setattr(module, "send_markdown", send_md)
     assert [x async for x in plugin.daily_wife(event)] == []
     assert sent[0]["work"] == "原神"
+    assert sent[0]["url"] == "https://host.example.com/image.png"
+    plugin.qq_fortune_markdown = True
+    (tmp_path / "card.png").write_bytes(default_avatar())
+    plugin.service.card = card
+    assert [x async for x in plugin.daily_fortune(event)] == []
+    assert sent[-1] == {"url": "https://host.example.com/image.png"}
+    assert len(uploads) == 2
+
+    async def upload_fail(*args):
+        raise ValueError("图床未配置")
+
+    plugin.image_host.upload = upload_fail
+    failed_fortune = [x async for x in plugin.daily_fortune(event)]
+    failed_wife = [x async for x in plugin.daily_wife(event)]
+    assert failed_fortune[0][0] == failed_wife[0][0] == "plain"
+    assert "图床配置" in failed_fortune[0][1] and "图床配置" in failed_wife[0][1]
+    assert len(sent) == 2  # Never send the original remote URL after upload failure.
     event.get_platform_name = lambda: "aiocqhttp"
     event.get_sender_id = lambda: "123456"
 
@@ -101,7 +133,7 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
 
     plugin.wife.card = official_card
     assert [x async for x in plugin.daily_wife(event)] == [("image", str(tmp_path / "wife.png"))]
-    assert len(sent) == 1
+    assert len(sent) == 2
     plugin.wife.card = fail
     result = [x async for x in plugin.daily_wife(event)]
     assert len(result) == 1 and result[0][0] == "plain"
