@@ -1,10 +1,13 @@
 import asyncio
+import hashlib
+import hmac
 import json
+from urllib.parse import parse_qs, quote, urlsplit
 
 import pytest
 from aiohttp import web
 
-from daily_fortune_test.hosting import ImageHost
+from daily_fortune_test.hosting import HTTP_PROVIDERS, S3_PROVIDERS, ImageHost
 from daily_fortune_test.service import FortuneService, default_avatar
 from daily_fortune_test.wife import send_markdown
 from test_wife import event, ITEM
@@ -128,3 +131,148 @@ async def test_unconfigured_host_never_opens_network_session(tmp_path):
     assert host._session is None
     assert not list(service.cache.rglob('host-*.json'))
     await service.close()
+
+
+def storage_config(**changes):
+    return dict(provider='Cloudflare R2', endpoint='https://storage.example.com',
+                bucket='test-bucket', access_key_id='test-access',
+                secret_access_key='test-secret', public_base_url='https://cdn.example.com',
+                **changes)
+
+
+def verify_v4(request):
+    """Independently check the signature received by the HTTP server."""
+    query = dict(request.query)
+    signature = query.pop('X-Amz-Signature')
+    signed_headers = query['X-Amz-SignedHeaders'].split(';')
+    canonical_query = '&'.join(f'{quote(k, safe="-_.~")}={quote(v, safe="-_.~")}'
+                               for k, v in sorted(query.items()))
+    canonical_headers = ''.join(f'{key}:{request.headers[key]}\n' for key in signed_headers)
+    canonical = '\n'.join(['PUT', request.raw_path.split('?')[0], canonical_query,
+                           canonical_headers, ';'.join(signed_headers), 'UNSIGNED-PAYLOAD'])
+    _, day, region, service, terminator = query['X-Amz-Credential'].split('/')
+    signing_key = b'AWS4test-secret'
+    for part in (day, region, service, terminator):
+        signing_key = hmac.new(signing_key, part.encode(), hashlib.sha256).digest()
+    scope = '/'.join((day, region, service, terminator))
+    to_sign = '\n'.join(['AWS4-HMAC-SHA256', query['X-Amz-Date'], scope,
+                         hashlib.sha256(canonical.encode()).hexdigest()])
+    expected = hmac.new(signing_key, to_sign.encode(), hashlib.sha256).hexdigest()
+    assert hmac.compare_digest(signature, expected)
+
+
+@pytest.mark.parametrize('status', [200, 403, 429, 503])
+async def test_signed_put_retry_cache_and_public_url(tmp_path, monkeypatch, status):
+    calls = []
+    image = default_avatar()
+
+    async def handler(request):
+        verify_v4(request)
+        assert request.headers['Content-Type'] == 'image/png'
+        assert 'Authorization' not in request.headers
+        assert await request.read() == image
+        calls.append(request.path)
+        return web.Response(status=status if len(calls) == 1 else 200)
+
+    async def no_sleep(_):
+        pass
+
+    monkeypatch.setattr('daily_fortune_test.hosting.asyncio.sleep', no_sleep)
+    app = web.Application()
+    app.router.add_put('/{tail:.*}', handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '127.0.0.1', 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+    config = storage_config(key_prefix='运势/space +')
+    config['endpoint'] = f'http://127.0.0.1:{port}'
+    service = FortuneService({'image_host': config}, tmp_path)
+    host = ImageHost(service)
+    restarted = ImageHost(service)
+    try:
+        if status == 403:
+            with pytest.raises(ValueError, match='403'):
+                await host.upload(image, '2026-09-29')
+            assert len(calls) == 1
+            assert not list(service.cache.rglob('host-*.json'))
+        else:
+            result = await host.upload(image, '2026-09-29')
+            assert result == ('https://cdn.example.com/' + quote('运势/space +', safe='/')
+                              + '/2026-09-29/' + hashlib.sha256(image).hexdigest() + '.png')
+            assert await restarted.upload(image, '2026-09-29') == result
+            assert restarted._session is None
+            assert len(calls) == (2 if status in (429, 503) else 1)
+            assert len(set(calls)) == 1
+            assert 'test-secret' not in next(service.cache.rglob('host-*.json')).read_text()
+    finally:
+        await host.close()
+        await restarted.close()
+        await service.close()
+        await runner.cleanup()
+
+
+@pytest.mark.parametrize('provider', S3_PROVIDERS)
+async def test_provider_signing_and_addressing(tmp_path, provider):
+    config = storage_config(region='example-region')
+    config['provider'] = provider
+    service = FortuneService({'image_host': config}, tmp_path)
+    host = ImageHost(service)
+    try:
+        host.validate()
+        parsed = urlsplit(host._signed_upload('test/a b.png'))
+        query = parse_qs(parsed.query)
+        if provider == '阿里云 OSS':
+            assert query['AWSAccessKeyId'] == ['test-access']
+            assert 'Signature' in query
+        else:
+            assert query['X-Amz-Algorithm'] == ['AWS4-HMAC-SHA256']
+            assert '/example-region/s3/aws4_request' in query['X-Amz-Credential'][0]
+        if S3_PROVIDERS[provider][1] == 'virtual':
+            assert parsed.hostname == 'test-bucket.storage.example.com'
+            assert parsed.path == '/test/a%20b.png'
+        else:
+            assert parsed.hostname == 'storage.example.com'
+            assert parsed.path == '/test-bucket/test/a%20b.png'
+    finally:
+        await host.close()
+        await service.close()
+
+
+@pytest.mark.parametrize('changes', [
+    {'bucket': ''}, {'access_key_id': ''}, {'secret_access_key': ''},
+    {'public_base_url': ''}, {'public_base_url': 'https://cdn.example.com/?token=x'},
+    {'endpoint': 'https://storage.example.com/bucket'},
+    {'provider': 'AWS S3', 'region': ''}, {'provider': '不存在'},
+    {'key_prefix': '../private'}, {'addressing_style': 'invalid'},
+])
+async def test_invalid_storage_config_before_network(tmp_path, changes):
+    config = storage_config()
+    config.update(changes)
+    service = FortuneService({'image_host': config}, tmp_path)
+    host = ImageHost(service)
+    with pytest.raises(ValueError):
+        await host.upload(default_avatar(), '2026-09-29')
+    assert host._session is None and host._s3 is None
+    await service.close()
+
+
+@pytest.mark.parametrize('key,value', [
+    ('provider', 'MinIO'), ('bucket', 'other'), ('endpoint', 'https://other.example.com'),
+    ('public_base_url', 'https://other.example.com'), ('key_prefix', 'other'),
+    ('access_key_id', 'other'), ('secret_access_key', 'other'),
+])
+def test_storage_configuration_changes_invalidate_cache(tmp_path, key, value):
+    config = storage_config()
+    first = ImageHost(FortuneService({'image_host': config}, tmp_path))
+    config[key] = value
+    second = ImageHost(FortuneService({'image_host': config}, tmp_path))
+    assert first._identity != second._identity
+
+
+def test_provider_dropdown_covers_all_adapters():
+    from pathlib import Path
+    schema = json.loads((Path(__file__).parents[1] / '_conf_schema.json').read_text('utf-8'))
+    provider = schema['image_host']['items']['provider']
+    assert provider['default'] == '自定义 HTTP'
+    assert set(provider['options']) == HTTP_PROVIDERS | S3_PROVIDERS.keys()

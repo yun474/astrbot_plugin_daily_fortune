@@ -89,31 +89,109 @@
     "condition": {
       "show_image_host": true
     },
-    "hint": "使用 multipart/form-data POST 上传接口，默认字段兼容兰空 V2。需返回公网可访问的图片直链。",
+    "hint": "先选择图床类型：HTTP 图床填写上传接口；对象存储填写 Endpoint、密钥、存储桶与公网访问地址。仅填写所选类型需要的字段。",
     "items": {
+      "provider": {
+        "description": "图床类型",
+        "type": "string",
+        "default": "自定义 HTTP",
+        "options": [
+          "自定义 HTTP",
+          "兰空 Lsky Pro V2",
+          "Cloudflare R2",
+          "AWS S3",
+          "阿里云 OSS",
+          "腾讯云 COS",
+          "七牛云 Kodo",
+          "MinIO",
+          "Backblaze B2",
+          "DigitalOcean Spaces",
+          "其他 S3 兼容存储"
+        ],
+        "hint": "旧配置默认继续使用自定义 HTTP；R2 请选择 Cloudflare R2。"
+      },
       "upload_url": {
-        "description": "上传 API 地址",
+        "description": "HTTP 图床：上传 API 地址",
         "type": "string",
         "default": "",
         "hint": "完整接口地址，例如 https://你的图床/api/v1/upload；不要填网页地址。"
       },
       "authorization": {
-        "description": "Authorization 鉴权值",
+        "description": "HTTP 图床：Authorization 鉴权值",
         "type": "string",
         "default": "",
         "hint": "例如 Bearer 你的Token；匿名上传可留空。不要填写到日志或公开截图中。"
       },
       "file_field": {
-        "description": "上传文件字段名",
+        "description": "HTTP 图床：上传文件字段名",
         "type": "string",
         "default": "file",
-        "hint": "按图床接口填写，兰空 V2 为 file。"
+        "hint": "按图床接口填写，兰空 V2 为 file。",
+        "condition": {
+          "provider": "自定义 HTTP"
+        }
       },
       "url_path": {
-        "description": "响应图片地址 JSON 路径",
+        "description": "HTTP 图床：响应图片地址 JSON 路径",
         "type": "string",
         "default": "data.links.url",
-        "hint": "例如 data.links.url 或 data.url；支持用数字访问数组，如 data.0.url。"
+        "hint": "例如 data.links.url 或 data.url；支持用数字访问数组，如 data.0.url。",
+        "condition": {
+          "provider": "自定义 HTTP"
+        }
+      },
+      "endpoint": {
+        "description": "对象存储：上传端点 Endpoint",
+        "type": "string",
+        "default": "",
+        "hint": "填写带 https:// 的服务端点，不含桶名、路径或查询参数。R2 为 https://账户ID.r2.cloudflarestorage.com；特定管辖区域请复制控制台完整端点。其他厂家示例见 README。"
+      },
+      "bucket": {
+        "description": "对象存储：存储桶名称",
+        "type": "string",
+        "default": "",
+        "hint": "填写已创建的存储桶；腾讯 COS 需包含 -APPID 后缀。"
+      },
+      "access_key_id": {
+        "description": "对象存储：Access Key ID",
+        "type": "string",
+        "default": "",
+        "hint": "R2 为 S3 API 凭据中的 Access Key ID；腾讯云为 SecretId；B2 为 keyID。"
+      },
+      "secret_access_key": {
+        "description": "对象存储：Secret Access Key",
+        "type": "string",
+        "default": "",
+        "hint": "R2 为 S3 API 凭据中的 Secret Access Key，不是 Cloudflare API Token。请勿公开配置或截图。"
+      },
+      "region": {
+        "description": "对象存储：区域 Region",
+        "type": "string",
+        "default": "",
+        "hint": "R2 留空自动使用 auto；OSS、MinIO、通用 S3 留空使用 us-east-1。其他类型需填写实际区域，如 ap-guangzhou、cn-east-1、us-west-004。"
+      },
+      "public_base_url": {
+        "description": "对象存储：图片公网基础地址",
+        "type": "string",
+        "default": "",
+        "hint": "QQ 能直接访问的桶域名或 CDN 基础地址，不是上传端点。R2 填绑定的自定义域名或已开启的 r2.dev 地址，如 https://img.example.com。不要重复填写下方路径前缀。"
+      },
+      "key_prefix": {
+        "description": "对象存储：对象路径前缀",
+        "type": "string",
+        "default": "daily-fortune",
+        "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。所有对象存储类型共用。"
+      },
+      "addressing_style": {
+        "description": "对象存储：寻址方式",
+        "type": "string",
+        "default": "auto",
+        "options": [
+          "auto",
+          "path",
+          "virtual"
+        ],
+        "hint": "auto 按厂家自动选择，通常无需修改。OSS 始终使用 virtual；自建 S3 可按服务要求选择。"
       },
       "retry_count": {
         "description": "失败后重试次数",

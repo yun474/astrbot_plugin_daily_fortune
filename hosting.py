@@ -1,13 +1,29 @@
-"""Multipart image hosting with persistent per-day URL caching."""
+"""HTTP and S3-compatible image hosting with persistent per-day URL caching."""
 import asyncio
 import hashlib
 import json
 from datetime import date
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import aiohttp
+from yarl import URL
 
 from .settings import number
+
+
+HTTP_PROVIDERS = {"自定义 HTTP", "兰空 Lsky Pro V2"}
+# OSS's S3 compatibility uses V2 signing and virtual-hosted addressing.
+S3_PROVIDERS = {
+    "Cloudflare R2": ("auto", "path", "s3v4"),
+    "AWS S3": ("", "virtual", "s3v4"),
+    "阿里云 OSS": ("us-east-1", "virtual", "s3"),
+    "腾讯云 COS": ("", "virtual", "s3v4"),
+    "七牛云 Kodo": ("", "virtual", "s3v4"),
+    "MinIO": ("us-east-1", "path", "s3v4"),
+    "Backblaze B2": ("", "path", "s3v4"),
+    "DigitalOcean Spaces": ("", "virtual", "s3v4"),
+    "其他 S3 兼容存储": ("us-east-1", "path", "s3v4"),
+}
 
 
 def http_url(value):
@@ -25,17 +41,40 @@ class ImageHost:
     def __init__(self, service):
         self.service = service
         self.config = dict(service.config.get("image_host", {}))
+        self.provider = self.config.get("provider", "自定义 HTTP")
         self.retries = number(self.config, "retry_count", 3, 0, 10)
         self.timeout = number(self.config, "timeout_seconds", 30, 5, 120)
         self._lock = asyncio.Lock()
         self._session = None
-        destination = {key: self.config.get(key) for key in (
-            "upload_url", "authorization", "file_field", "url_path"
-        )}
+        self._s3 = None
+        destination = {key: value for key, value in self.config.items()
+                       if key not in {"retry_count", "timeout_seconds"}}
         self._identity = hashlib.sha256(json.dumps(destination, sort_keys=True).encode()).hexdigest()
 
     def validate(self):
+        if self.provider in S3_PROVIDERS:
+            for key in ("endpoint", "public_base_url"):
+                parsed = urlsplit(http_url(self.config.get(key, "")))
+                if parsed.query or parsed.fragment:
+                    raise ValueError(f"{key} 不能包含查询参数或片段")
+                if key == "endpoint" and parsed.path.strip("/"):
+                    raise ValueError("上传端点应为服务地址，不要包含存储桶或路径")
+            for key in ("bucket", "access_key_id", "secret_access_key"):
+                if not self.config.get(key, "").strip():
+                    raise ValueError(f"对象存储配置缺少 {key}")
+            if not (self.config.get("region", "").strip() or S3_PROVIDERS[self.provider][0]):
+                raise ValueError("请填写存储桶所属区域 region")
+            if self.config.get("addressing_style", "auto") not in {"auto", "path", "virtual"}:
+                raise ValueError("对象存储寻址方式无效")
+            prefix = self.config.get("key_prefix", "daily-fortune").strip("/")
+            if any(part in {".", ".."} for part in prefix.split("/")):
+                raise ValueError("对象路径前缀不能包含 . 或 .. 路径段")
+            return
+        if self.provider not in HTTP_PROVIDERS:
+            raise ValueError("未知图床类型，请在图床配置中重新选择")
         http_url(self.config.get("upload_url", ""))
+        if self.provider == "兰空 Lsky Pro V2":
+            return
         if not self.config.get("file_field", "file").strip():
             raise ValueError("图床文件字段不能为空")
         if not self.config.get("url_path", "data.links.url").strip():
@@ -49,7 +88,7 @@ class ImageHost:
         async with self._lock:
             if target.is_file():
                 return http_url(json.loads(target.read_text("utf-8"))["url"])
-            url = await self._upload(data)
+            url = await self._upload(data, day)
             target.parent.mkdir(parents=True, exist_ok=True)
             temporary = target.with_suffix(".tmp")
             try:
@@ -59,7 +98,30 @@ class ImageHost:
                 temporary.unlink(missing_ok=True)
             return url
 
-    async def _upload(self, data):
+    def _signed_upload(self, key):
+        # SDK only signs locally; aiohttp owns network I/O, timeouts and retries.
+        if self._s3 is None:
+            import boto3
+            from botocore.config import Config
+
+            region, style, signature = S3_PROVIDERS[self.provider]
+            selected_style = self.config.get("addressing_style", "auto")
+            if selected_style != "auto" and self.provider != "阿里云 OSS":
+                style = selected_style
+            self._s3 = boto3.client(
+                "s3", endpoint_url=self.config["endpoint"].rstrip("/"),
+                region_name=self.config.get("region", "").strip() or region,
+                aws_access_key_id=self.config["access_key_id"].strip(),
+                aws_secret_access_key=self.config["secret_access_key"].strip(),
+                config=Config(signature_version=signature, s3={"addressing_style": style}),
+            )
+        return self._s3.generate_presigned_url(
+            "put_object", Params={"Bucket": self.config["bucket"].strip(),
+                                  "Key": key, "ContentType": "image/png"},
+            ExpiresIn=300,
+        )
+
+    async def _upload(self, data, day):
         if self._session is None:
             self._session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=self.timeout), trust_env=True
@@ -68,22 +130,39 @@ class ImageHost:
         headers = {"Accept": "application/json"}
         if authorization:
             headers["Authorization"] = authorization
+        is_s3 = self.provider in S3_PROVIDERS
+        filename = hashlib.sha256(data).hexdigest() + ".png"
+        prefix = self.config.get("key_prefix", "daily-fortune").strip("/")
+        key = "/".join(part for part in (prefix, day, filename) if part)
+        public_url = (http_url(self.config["public_base_url"].rstrip("/") + "/" + quote(key, safe="/"))
+                      if is_s3 else None)
         for attempt in range(self.retries + 1):
-            form = aiohttp.FormData()
-            form.add_field(self.config.get("file_field", "file"), data,
-                           filename=hashlib.sha256(data).hexdigest() + ".png", content_type="image/png")
+            if is_s3:
+                request = self._session.put(
+                    URL(self._signed_upload(key), encoded=True), data=data,
+                    headers={"Content-Type": "image/png"}, allow_redirects=False,
+                )
+            else:
+                form = aiohttp.FormData()
+                field = "file" if self.provider == "兰空 Lsky Pro V2" else self.config.get("file_field", "file")
+                form.add_field(field, data, filename=filename, content_type="image/png")
+                request = self._session.post(self.config["upload_url"], data=form,
+                                             headers=headers, allow_redirects=False)
             try:
-                async with self._session.post(self.config["upload_url"], data=form,
-                                              headers=headers, allow_redirects=False) as response:
+                async with request as response:
                     if response.status == 429 or response.status >= 500:
                         if attempt < self.retries:
                             await asyncio.sleep(1)
                             continue
                     if not 200 <= response.status < 300:
                         raise ValueError(f"图床上传失败：HTTP {response.status}")
+                    if is_s3:
+                        return public_url
                     result = await response.json(content_type=None)
                     try:
-                        for part in self.config.get("url_path", "data.links.url").split("."):
+                        path = ("data.links.url" if self.provider == "兰空 Lsky Pro V2"
+                                else self.config.get("url_path", "data.links.url"))
+                        for part in path.split("."):
                             result = result[int(part)] if isinstance(result, list) else result[part]
                     except (KeyError, TypeError, IndexError, ValueError):
                         raise ValueError("图床响应缺少配置的图片地址字段") from None
@@ -95,6 +174,9 @@ class ImageHost:
         raise RuntimeError("图床上传失败")
 
     async def close(self):
+        if self._s3:
+            self._s3.close()
+            self._s3 = None
         if self._session:
             await self._session.close()
             self._session = None

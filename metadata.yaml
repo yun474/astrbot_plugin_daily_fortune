@@ -1,7 +1,7 @@
 name: astrbot_plugin_daily_fortune
 display_name: 今日运势与今日老婆
 desc: 每日运势卡片与二次元老婆抽取，QQ 官方支持 Markdown 图文、作品名和快捷按钮，无签到与经验系统。
-version: 0.1.0
+version: 0.2.0
 author: yun474
 repo: https://github.com/yun474/astrbot_plugin_daily_fortune
 astrbot_version: ">=3.5.3"

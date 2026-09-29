@@ -131,8 +131,8 @@ Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤�
 
 ### 开启 MD 模式与配置图床
 
-1. 打开「展开图床配置」，填写上传接口和鉴权信息。
-2. 按图床接口文档填写文件字段与返回地址路径，下表默认格式兼容兰空 V2。
+1. 更新依赖（`pip install -r requirements.txt`），打开「展开图床配置」，从「图床类型」下拉列表选择服务商。
+2. HTTP 图床填写上传接口与鉴权信息；对象存储填写端点、存储桶、密钥、区域和图片公网基础地址。标有「HTTP 图床」与「对象存储」的字段分别用于对应类型，无需全部填写。
 3. 分别开启「今日运势：MD 模式」或「今日老婆：MD 模式」，保存并重载插件。
 4. 配置完成后可关闭「展开图床配置」收起详细设置，上传功能仍正常工作。
 
@@ -145,9 +145,43 @@ Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤�
 | `retry_count` | 失败后最多重试次数，默认 `3`，范围 0～10；不含首次请求 |
 | `timeout_seconds` | 每次图床上传超时，默认 `30` 秒，范围 5～120 |
 
-图床需支持 `multipart/form-data` 上传并返回 JSON，图片直链必须允许 QQ 服务器公开访问。默认格式参考 [兰空 V2 上传配置](https://github.com/lsky-org/lsky-pro/discussions/357)。仅支持这一类 HTTP 上传接口，不直接支持 S3 签名上传或网页表单登录。
+以上 HTTP 字段用于「自定义 HTTP」和「兰空 Lsky Pro V2」。选择兰空时自动使用 `file` 与 `data.links.url`；自定义 HTTP 可自行修改，兼容支持 `multipart/form-data` 上传并返回 JSON 的图床，不支持网页表单登录。旧配置默认使用自定义 HTTP，无需迁移。默认格式参考 [兰空 V2 上传配置](https://github.com/lsky-org/lsky-pro/discussions/357)。
 
-运势 MD 上传完整运势卡，老婆 MD 下载选中的角色图片再上传。相同图片在当天复用已上传地址；本地上传记录随图片缓存清理。图床上的远程图片需通过图床自身的保留策略清理。
+#### Cloudflare R2 填写示例
+
+| 配置项 | 示例 / 说明 |
+| --- | --- |
+| `provider` | 下拉选择 `Cloudflare R2` |
+| `endpoint` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`；复制 R2 控制台的 S3 API 端点，特定管辖区域使用其完整端点 |
+| `bucket` | 已创建的桶名称，例如 `bot-images` |
+| `access_key_id` / `secret_access_key` | R2 S3 API 凭据的 Access Key ID 与 Secret Access Key，需具备该桶的对象写入权限；不是 Cloudflare API Token |
+| `region` | 留空，自动使用 `auto` |
+| `public_base_url` | 桶绑定的公开自定义域名，例如 `https://img.example.com`；也可填已开启的 `https://pub-xxx.r2.dev` 测试地址 |
+| `key_prefix` | 默认 `daily-fortune`；可留空 |
+| `addressing_style` | 保持 `auto` |
+
+最终图片地址形如 `https://img.example.com/daily-fortune/2026-09-29/<图片哈希>.png`。公网基础地址应指向桶根目录，不要再次附加路径前缀。上传端点用于签名写入，不能代替图片公网地址。参考 [R2 S3 接入文档](https://developers.cloudflare.com/r2/examples/aws/boto3/) 与 [公开访问配置](https://developers.cloudflare.com/r2/buckets/public-buckets/)；`r2.dev` 用于开发测试，生产使用自定义域名。
+
+#### 其他对象存储
+
+下列类型均使用相同的对象存储配置字段，密钥填对应厂家的访问密钥。端点必须包含 `https://`，不含桶名；MinIO 的本地服务也可使用 `http://主机:端口`。`public_base_url` 必须填写对应桶可公开读取的基础地址或 CDN 地址（路径式访问时包含桶名）。
+
+| 下拉类型 | 上传端点示例 | 区域与自动寻址 |
+| --- | --- | --- |
+| AWS S3 | `https://s3.ap-southeast-1.amazonaws.com` | 填实际区域，如 `ap-southeast-1`；virtual |
+| 阿里云 OSS | `https://s3.oss-cn-hangzhou.aliyuncs.com` | 区域可留空；使用 S3 V2 签名，强制 virtual |
+| 腾讯云 COS | `https://cos.ap-guangzhou.myqcloud.com` | `ap-guangzhou`；virtual；桶名含 `-APPID` |
+| 七牛云 Kodo | `https://s3.cn-east-2.qiniucs.com` | `cn-east-2`；virtual；使用 S3 接口端点 |
+| MinIO | `https://s3.example.com` | 默认 `us-east-1`，按服务配置修改；path；填写 S3 API 端口而非管理面板 |
+| Backblaze B2 | `https://s3.us-west-004.backblazeb2.com` | `us-west-004`，以控制台为准；path；密钥为 keyID / applicationKey |
+| DigitalOcean Spaces | `https://nyc3.digitaloceanspaces.com` | `nyc3`，以桶区域为准；virtual |
+| 其他 S3 兼容存储 | 厂家提供的 S3 API 端点 | 默认 `us-east-1`；path；可修改区域与寻址方式 |
+
+适配依据：[OSS SDK 接入与签名](https://help.aliyun.com/zh/oss/developer-reference/use-aws-sdks-to-access-oss)、[COS S3 配置](https://intl.cloud.tencent.com/document/product/436/34688?lang=en)、[七牛服务域名](https://developer.qiniu.com/kodo/4088/s3-access-domainname)、[B2 S3 接口](https://www.backblaze.com/docs/en/cloud-storage-call-the-s3-compatible-api)、[Spaces 接口](https://docs.digitalocean.com/reference/api/spaces/)。已用本地 HTTP 服务验证上传、签名参数、重试与缓存；未使用各厂家的真实账户逐一联调。
+
+图片直链必须允许 QQ 服务器公开访问。对象存储上传不会自动修改桶权限、ACL 或域名配置，也不会生成临时下载链接；请预先配置公开读取或可公开访问的 CDN。仅支持长期访问密钥，不支持 STS 会话凭据。新增 `boto3` 依赖仅用于本地签名，实际上传由异步 HTTP 客户端执行。
+
+运势 MD 上传完整运势卡，老婆 MD 下载选中的角色图片再上传。相同图片在当天复用已上传地址；修改图床类型、桶、密钥、公网地址或路径前缀后不复用旧配置缓存。本地上传记录随图片缓存清理。对象存储按「前缀/日期/图片哈希.png」保存，图床上的远程图片需通过图床自身的保留策略清理。
 
 图床网络错误、429 和 5xx 响应，以及 QQ 明确的图片下载／校验失败，默认最多重试 3 次（共 4 次尝试）。鉴权错误、响应字段错误不重试；QQ 发送超时因结果不明也不自动重发。每次 QQ MD 请求都开启 `force_verify_image_resource=true`。
 
