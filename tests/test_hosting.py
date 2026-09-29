@@ -163,7 +163,7 @@ def verify_v4(request):
     assert hmac.compare_digest(signature, expected)
 
 
-@pytest.mark.parametrize('status', [200, 403, 429, 503])
+@pytest.mark.parametrize('status', [200, 403, 404, 429, 503])
 async def test_signed_put_retry_cache_and_public_url(tmp_path, monkeypatch, status):
     calls = []
     image = default_avatar()
@@ -174,6 +174,8 @@ async def test_signed_put_retry_cache_and_public_url(tmp_path, monkeypatch, stat
         assert 'Authorization' not in request.headers
         assert await request.read() == image
         calls.append(request.path)
+        if status == 404:
+            return web.Response(status=404, text='<Error><Code>NoSuchBucket</Code></Error>')
         return web.Response(status=status if len(calls) == 1 else 200)
 
     async def no_sleep(_):
@@ -193,8 +195,8 @@ async def test_signed_put_retry_cache_and_public_url(tmp_path, monkeypatch, stat
     host = ImageHost(service)
     restarted = ImageHost(service)
     try:
-        if status == 403:
-            with pytest.raises(ValueError, match='403'):
+        if status in (403, 404):
+            with pytest.raises(ValueError, match='NoSuchBucket' if status == 404 else '403'):
                 await host.upload(image, '2026-09-29')
             assert len(calls) == 1
             assert not list(service.cache.rglob('host-*.json'))
@@ -344,3 +346,22 @@ def test_legacy_migration_does_not_replace_configured_section():
     host['r2'] = {'endpoint': 'https://new.example.com', 'bucket': 'new-bucket'}
     assert migrate_host_config({'image_host': host})
     assert host['r2'] == {'endpoint': 'https://new.example.com', 'bucket': 'new-bucket'}
+
+
+@pytest.mark.parametrize('body,expected', [
+    (b'<Error><Code>NoSuchBucket</Code><Message>secret-credential</Message></Error>', 'NoSuchBucket'),
+    (b'<Error xmlns="urn:s3"><Code>SignatureDoesNotMatch</Code></Error>', 'SignatureDoesNotMatch'),
+    (b'<Error><Code>secret-credential</Code></Error>', 'S3 API'),
+    (b'<html>secret-credential</html>', 'S3 API'),
+    (b'', 'S3 API'),
+])
+async def test_upload_diagnostics_never_echo_response_credentials(tmp_path, body, expected):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    service = FortuneService({'image_host': storage_config()}, tmp_path)
+    host = ImageHost(service)
+    response = SimpleNamespace(status=404, content=SimpleNamespace(read=AsyncMock(return_value=body)))
+    error = str(await host._upload_error(response))
+    assert expected in error and 'Cloudflare R2' in error and '404' in error
+    assert 'secret-credential' not in error
+    await service.close()

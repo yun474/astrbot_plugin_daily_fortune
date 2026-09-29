@@ -5,6 +5,7 @@ import json
 from copy import deepcopy
 from datetime import date
 from urllib.parse import quote, urlsplit
+from xml.etree import ElementTree
 
 import aiohttp
 from yarl import URL
@@ -35,6 +36,16 @@ PROVIDER_SECTIONS = {
 HTTP_FIELDS = ("upload_url", "authorization", "file_field", "url_path")
 S3_FIELDS = ("endpoint", "bucket", "access_key_id", "secret_access_key", "region",
              "public_base_url", "key_prefix", "addressing_style")
+
+S3_ERRORS = {
+    "NoSuchBucket": "找不到存储桶，请核对桶名、端点所属账户及区域",
+    "NoSuchKey": "上传路径不存在，请确认 Endpoint 是 S3 API 端点而非图片公网域名",
+    "AccessDenied": "访问被拒绝，请检查密钥是否具有该桶的对象写入权限",
+    "InvalidAccessKeyId": "Access Key ID 无效，请检查所选图床的访问密钥",
+    "SignatureDoesNotMatch": "签名不匹配，请核对密钥、区域、端点及寻址方式",
+    "AuthorizationHeaderMalformed": "鉴权格式或区域错误，请核对区域与端点",
+    "RequestTimeTooSkewed": "请求时间偏差过大，请同步机器人服务器时间",
+}
 
 
 def migrate_host_config(config):
@@ -159,6 +170,26 @@ class ImageHost:
             ExpiresIn=300,
         )
 
+    async def _upload_error(self, response):
+        message = f"图床上传失败：HTTP {response.status}（{self.provider}）"
+        if self.provider in S3_PROVIDERS:
+            # Only emit recognized codes and local explanations, never response
+            # text or signed URLs, which may echo access keys and signatures.
+            try:
+                body = await response.content.read(16384)
+                root = ElementTree.fromstring(body)
+                code = next((node.text for node in root.iter()
+                             if node.tag.rsplit('}', 1)[-1] == 'Code'), None)
+            except (ElementTree.ParseError, aiohttp.ClientError, asyncio.TimeoutError):
+                code = None
+            if code in S3_ERRORS:
+                return ValueError(f"{message}；{code}：{S3_ERRORS[code]}")
+            if response.status == 404:
+                message += "；请核对 S3 API 上传端点、桶名与所属账户/区域；不要使用图片公网域名上传"
+        elif response.status == 404:
+            message += "；请核对完整的 HTTP 上传 API 路径；使用 R2 时应选择 Cloudflare R2 类型"
+        return ValueError(message)
+
     async def _upload(self, data, day):
         if self._session is None:
             self._session = aiohttp.ClientSession(
@@ -193,7 +224,7 @@ class ImageHost:
                             await asyncio.sleep(1)
                             continue
                     if not 200 <= response.status < 300:
-                        raise ValueError(f"图床上传失败：HTTP {response.status}")
+                        raise await self._upload_error(response)
                     if is_s3:
                         return public_url
                     result = await response.json(content_type=None)
