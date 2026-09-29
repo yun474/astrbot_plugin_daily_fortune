@@ -12,7 +12,7 @@ from .service import FortuneService
 from .targets import target_user
 from .settings import number
 from .hosting import ImageHost, migrate_host_config
-from .service import normalize_image
+from .service import markdown_image
 from .wife import WifeService, send_markdown, supports_markdown
 
 logger = logging.getLogger("astrbot")
@@ -66,17 +66,23 @@ class DailyFortune(Star):
             yield event.plain_result("角色图库暂时无法读取，请稍后再试。")
             return
         if self.qq_wife_markdown and supports_markdown(event):
+            stage = "下载原图"
             try:
                 self.image_host.validate()
                 picture = await self.service._download(item["url"])
-                picture = await asyncio.to_thread(normalize_image, picture, None)
+                stage = "压缩图片"
+                picture = await asyncio.to_thread(markdown_image, picture)
+                stage = "图床上传"
+                logger.info("今日老婆 MD：开始上传，图片 %d 字节", len(picture))
                 url = await self.image_host.upload(picture, today())
+                stage = "QQ 发送"
+                logger.info("今日老婆 MD：图床地址已取得，开始 QQ 发送")
                 if await send_markdown(event, dict(item, url=url), retries=self.image_host.retries):
                     event.stop_event()
                     return
             except Exception:
-                logger.exception("今日老婆 Markdown 发送失败")
-                yield event.plain_result("今日老婆 MD 发送失败，请检查图床配置或稍后重试；当天角色已保留。")
+                logger.exception("今日老婆 Markdown 失败，阶段：%s", stage)
+                yield event.plain_result(f"今日老婆 MD 失败（{stage}），请查看日志；当天角色已保留。图床配置与 QQ 发送分别检查。")
                 return
         try:
             image = await self.wife.card(uid, item, avatar_url(event))
@@ -99,14 +105,21 @@ class DailyFortune(Star):
             yield event.plain_result(text_result(draw(uid, date)))
             return
         if self.qq_fortune_markdown and supports_markdown(event):
+            stage = "压缩图片"
             try:
                 data = await asyncio.to_thread(image.read_bytes)
+                data = await asyncio.to_thread(markdown_image, data)
+                stage = "图床上传"
+                logger.info("今日运势 MD：开始上传，图片 %d 字节", len(data))
                 url = await self.image_host.upload(data, date)
-                await send_markdown(event, {"url": url}, retries=self.image_host.retries, fortune=True)
+                stage = "QQ 发送"
+                logger.info("今日运势 MD：图床地址已取得，开始 QQ 发送")
+                if not await send_markdown(event, {"url": url}, retries=self.image_host.retries, fortune=True):
+                    raise RuntimeError("当前事件不支持 QQ Markdown")
                 event.stop_event()
             except Exception:
-                logger.exception("今日运势 Markdown 发送失败")
-                yield event.plain_result("今日运势 MD 发送失败，请检查图床配置或稍后重试。")
+                logger.exception("今日运势 Markdown 失败，阶段：%s", stage)
+                yield event.plain_result(f"今日运势 MD 失败（{stage}），请查看日志；图床配置与 QQ 发送分别检查。")
             return
         yield event.image_result(str(image))
 

@@ -156,3 +156,19 @@ async def test_cleanup_records_and_temp_files_preserves_catalog(tmp_path):
     assert not old.exists() and not stale.exists()
     assert all(path.exists() for path in (current, catalog, fresh, unrelated))
     await service.close()
+
+
+async def test_qq_hung_request_times_out_and_logs(monkeypatch, caplog):
+    from daily_fortune_test import wife as module
+    calls = []
+
+    async def request(*args, **kwargs):
+        calls.append(1)
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(module, 'QQ_SEND_TIMEOUT', 0.01)
+    with caplog.at_level('INFO', logger='astrbot'):
+        with pytest.raises(asyncio.TimeoutError):
+            await send_markdown(event(request), ITEM)
+    assert calls == [1]
+    assert '开始请求' in caplog.text and '请求超时' in caplog.text

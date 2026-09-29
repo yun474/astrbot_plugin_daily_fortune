@@ -43,6 +43,24 @@ def default_avatar() -> bytes:
     return output.getvalue()
 
 
+def markdown_image(data: bytes) -> bytes:
+    """Bound MD images to 1600px and 1 MiB without changing original retrieval."""
+    with Image.open(io.BytesIO(data)) as source:
+        if source.width * source.height > 25_000_000:
+            raise ValueError("图片尺寸过大")
+        image = ImageOps.exif_transpose(source).convert("RGBA")
+        image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+        background = Image.new("RGBA", image.size, "white")
+        image = Image.alpha_composite(background, image).convert("RGB")
+        for quality in (88, 78, 68):
+            output = io.BytesIO()
+            image.save(output, "JPEG", quality=quality, optimize=True)
+            if output.tell() <= 1024 * 1024:
+                return output.getvalue()
+            image.thumbnail((int(image.width * .8), int(image.height * .8)), Image.Resampling.LANCZOS)
+    raise ValueError("MD 图片压缩后仍超过 1 MiB")
+
+
 class FortuneService:
     def __init__(self, config, data_dir: Path):
         self.config = dict(config)

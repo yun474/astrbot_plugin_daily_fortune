@@ -147,7 +147,7 @@ class ImageHost:
                 temporary.unlink(missing_ok=True)
             return url
 
-    def _signed_upload(self, key):
+    def _signed_upload(self, key, content_type="image/png"):
         # SDK only signs locally; aiohttp owns network I/O, timeouts and retries.
         if self._s3 is None:
             import boto3
@@ -166,7 +166,7 @@ class ImageHost:
             )
         return self._s3.generate_presigned_url(
             "put_object", Params={"Bucket": self.config["bucket"].strip(),
-                                  "Key": key, "ContentType": "image/png"},
+                                  "Key": key, "ContentType": content_type},
             ExpiresIn=300,
         )
 
@@ -200,7 +200,9 @@ class ImageHost:
         if authorization:
             headers["Authorization"] = authorization
         is_s3 = self.provider in S3_PROVIDERS
-        filename = hashlib.sha256(data).hexdigest() + ".png"
+        is_jpeg = data.startswith(b"\xff\xd8\xff")
+        content_type = "image/jpeg" if is_jpeg else "image/png"
+        filename = hashlib.sha256(data).hexdigest() + (".jpg" if is_jpeg else ".png")
         prefix = self.config.get("key_prefix", "daily-fortune").strip("/")
         key = "/".join(part for part in (prefix, day, filename) if part)
         public_url = (http_url(self.config["public_base_url"].rstrip("/") + "/" + quote(key, safe="/"))
@@ -208,13 +210,13 @@ class ImageHost:
         for attempt in range(self.retries + 1):
             if is_s3:
                 request = self._session.put(
-                    URL(self._signed_upload(key), encoded=True), data=data,
-                    headers={"Content-Type": "image/png"}, allow_redirects=False,
+                    URL(self._signed_upload(key, content_type), encoded=True), data=data,
+                    headers={"Content-Type": content_type}, allow_redirects=False,
                 )
             else:
                 form = aiohttp.FormData()
                 field = "file" if self.provider == "兰空 Lsky Pro V2" else self.config.get("file_field", "file")
-                form.add_field(field, data, filename=filename, content_type="image/png")
+                form.add_field(field, data, filename=filename, content_type=content_type)
                 request = self._session.post(self.config["upload_url"], data=form,
                                              headers=headers, allow_redirects=False)
             try:

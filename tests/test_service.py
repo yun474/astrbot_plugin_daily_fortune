@@ -181,3 +181,21 @@ async def test_original_keeps_source_resolution_without_redrawing(tmp_path):
     assert await restarted.original("self", "2026-09-29") == result
     await restarted.close()
     await service.close()
+
+
+def test_markdown_image_bounds_size_and_preserves_original():
+    import io
+    import random
+    from PIL import Image
+    from daily_fortune_test.service import markdown_image
+    image = Image.frombytes('RGB', (2400, 1800), random.Random(42).randbytes(2400 * 1800 * 3))
+    original = io.BytesIO()
+    image.save(original, 'PNG')
+    data = original.getvalue()
+    result = markdown_image(data)
+    assert len(result) <= 1024 * 1024
+    assert len(result) < len(data) / 4
+    with Image.open(io.BytesIO(result)) as decoded:
+        assert decoded.format == 'JPEG'
+        assert max(decoded.size) <= 1600
+    assert original.getvalue() == data

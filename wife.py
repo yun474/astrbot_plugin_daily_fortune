@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import time
 from html import escape
@@ -13,6 +14,9 @@ from .avatar import field
 from .renderer import ASSETS, build_wife_html
 from .service import normalize_image
 from .settings import number
+
+logger = logging.getLogger("astrbot")
+QQ_SEND_TIMEOUT = 35
 
 
 def parse_catalog(text):
@@ -191,15 +195,26 @@ async def send_markdown(event, item, retries=3, fortune=False):
     payload = payload_for(event, item, fortune)
     for attempt in range(retries + 1):
         try:
-            result = await event.bot.api._http.request(route, json=payload)
+            logger.info("QQ Markdown：开始请求，尝试 %d/%d，超时 %d 秒", attempt + 1, retries + 1, QQ_SEND_TIMEOUT)
+            result = await asyncio.wait_for(
+                event.bot.api._http.request(route, json=payload), timeout=QQ_SEND_TIMEOUT
+            )
             if not isinstance(result, dict):
                 raise RuntimeError("QQ 消息发送结果不明")
             if result.get("code") not in (None, 0):
                 raise RuntimeError(str(result))
             if not result.get("id"):
                 raise RuntimeError("QQ 未返回消息 ID，发送结果不明")
+            logger.info("QQ Markdown：平台已返回消息 ID，发送成功")
             return True
+        except asyncio.CancelledError:
+            logger.warning("QQ Markdown：请求被取消，发送结果不明")
+            raise
+        except asyncio.TimeoutError:
+            logger.error("QQ Markdown：请求超时，发送结果不明，不自动重发")
+            raise
         except Exception as exc:
+            logger.error("QQ Markdown：请求失败（%s）：%s", type(exc).__name__, exc)
             if attempt >= retries or not image_failure(exc):
                 raise
             await asyncio.sleep(1)

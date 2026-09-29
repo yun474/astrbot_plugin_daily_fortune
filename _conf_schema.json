@@ -211,7 +211,7 @@
             "description": "对象路径前缀",
             "type": "string",
             "default": "daily-fortune",
-            "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。"
+            "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。"
           },
           "addressing_style": {
             "description": "寻址方式",
@@ -273,7 +273,7 @@
             "description": "对象路径前缀",
             "type": "string",
             "default": "daily-fortune",
-            "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。"
+            "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。"
           },
           "addressing_style": {
             "description": "寻址方式",
@@ -335,7 +335,7 @@
             "description": "对象路径前缀",
             "type": "string",
             "default": "daily-fortune",
-            "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。"
+            "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。"
           },
           "addressing_style": {
             "description": "寻址方式",
@@ -397,7 +397,7 @@
             "description": "对象路径前缀",
             "type": "string",
             "default": "daily-fortune",
-            "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。"
+            "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。"
           },
           "addressing_style": {
             "description": "寻址方式",
@@ -459,7 +459,7 @@
             "description": "对象路径前缀",
             "type": "string",
             "default": "daily-fortune",
-            "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。"
+            "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。"
           },
           "addressing_style": {
             "description": "寻址方式",
@@ -521,7 +521,7 @@
             "description": "对象路径前缀",
             "type": "string",
             "default": "daily-fortune",
-            "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。"
+            "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。"
           },
           "addressing_style": {
             "description": "寻址方式",
@@ -583,7 +583,7 @@
             "description": "对象路径前缀",
             "type": "string",
             "default": "daily-fortune",
-            "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。"
+            "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。"
           },
           "addressing_style": {
             "description": "寻址方式",
@@ -645,7 +645,7 @@
             "description": "对象路径前缀",
             "type": "string",
             "default": "daily-fortune",
-            "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。"
+            "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。"
           },
           "addressing_style": {
             "description": "寻址方式",
@@ -707,7 +707,7 @@
             "description": "对象路径前缀",
             "type": "string",
             "default": "daily-fortune",
-            "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。"
+            "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。"
           },
           "addressing_style": {
             "description": "寻址方式",
@@ -808,7 +808,7 @@
         "description": "对象存储：对象路径前缀",
         "type": "string",
         "default": "daily-fortune",
-        "hint": "最终对象路径为 前缀/日期/图片哈希.png；可留空。所有对象存储类型共用。",
+        "hint": "最终对象路径为 前缀/日期/图片哈希.jpg；可留空。所有对象存储类型共用。",
         "invisible": true
       },
       "addressing_style": {

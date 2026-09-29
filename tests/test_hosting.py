@@ -164,13 +164,17 @@ def verify_v4(request):
 
 
 @pytest.mark.parametrize('status', [200, 403, 404, 429, 503])
-async def test_signed_put_retry_cache_and_public_url(tmp_path, monkeypatch, status):
+@pytest.mark.parametrize('jpeg', [False, True])
+async def test_signed_put_retry_cache_and_public_url(tmp_path, monkeypatch, status, jpeg):
     calls = []
     image = default_avatar()
+    if jpeg:
+        from daily_fortune_test.service import markdown_image
+        image = markdown_image(image)
 
     async def handler(request):
         verify_v4(request)
-        assert request.headers['Content-Type'] == 'image/png'
+        assert request.headers['Content-Type'] == ('image/jpeg' if jpeg else 'image/png')
         assert 'Authorization' not in request.headers
         assert await request.read() == image
         calls.append(request.path)
@@ -203,7 +207,8 @@ async def test_signed_put_retry_cache_and_public_url(tmp_path, monkeypatch, stat
         else:
             result = await host.upload(image, '2026-09-29')
             assert result == ('https://cdn.example.com/' + quote('运势/space +', safe='/')
-                              + '/2026-09-29/' + hashlib.sha256(image).hexdigest() + '.png')
+                              + '/2026-09-29/' + hashlib.sha256(image).hexdigest()
+                              + ('.jpg' if jpeg else '.png'))
             assert await restarted.upload(image, '2026-09-29') == result
             assert restarted._session is None
             assert len(calls) == (2 if status in (429, 503) else 1)
