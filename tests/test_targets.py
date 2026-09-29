@@ -36,3 +36,10 @@ def test_no_target_defaults_to_sender(content):
     event = NS(message_obj=NS(raw_message={"content": content}, self_id="BOT"),
                get_sender_id=lambda: "SELF")
     assert target_user(event, "老婆原图") == "SELF"
+
+
+def test_custom_wake_prefix_uses_framework_normalized_text():
+    event = NS(message_str='老婆原图 <qqbot-at-user id="OTHER" />',
+               message_obj=NS(raw_message={'content': '云云老婆原图 <qqbot-at-user id="OTHER" />'}),
+               get_sender_id=lambda: 'SELF')
+    assert target_user(event, '老婆原图') == 'OTHER'

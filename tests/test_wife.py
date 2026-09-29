@@ -25,7 +25,12 @@ def test_catalog_and_payload():
     assert payload["markdown"]["content"].startswith('<qqbot-at-user id="USER" />')
     assert "作品：原神" in payload["markdown"]["content"]
     assert payload["force_verify_image_resource"] is True
+    assert payload["markdown"]["content"].endswith("\n\n> 要好好对她哦~\n")
     assert [b["action"]["data"] for b in payload["keyboard"]["content"]["rows"][0]["buttons"]] == ["今日老婆", "今日运势"]
+    fortune = payload_for(event(None), {"url": ITEM["url"]}, fortune=True)
+    assert fortune["markdown"]["content"].startswith('<qqbot-at-user id="USER" />')
+    assert fortune["markdown"]["content"].endswith("\n\n> 请勿迷信，仅供参考\n")
+    assert fortune["keyboard"] == payload["keyboard"]
 
 
 @pytest.mark.asyncio

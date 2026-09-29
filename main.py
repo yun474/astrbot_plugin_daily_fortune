@@ -54,6 +54,8 @@ class DailyFortune(Star):
     @filter.command("今日老婆", alias={"jrlp", "抽老婆"})
     async def daily_wife(self, event: AstrMessageEvent):
         """抽取当天的二次元角色，QQ 官方群聊和私聊使用原生 Markdown。"""
+        # AstrBot's True means suppress its default LLM request (despite the name).
+        event.should_call_llm(True)
         try:
             uid = f"{event.get_platform_id()}:{event.get_sender_id()}"
             item = await self.wife.select(uid, today())
@@ -68,6 +70,7 @@ class DailyFortune(Star):
                 picture = await asyncio.to_thread(normalize_image, picture, None)
                 url = await self.image_host.upload(picture, today())
                 if await send_markdown(event, dict(item, url=url), retries=self.image_host.retries):
+                    event.stop_event()
                     return
             except Exception:
                 logger.exception("今日老婆 Markdown 发送失败")
@@ -84,6 +87,7 @@ class DailyFortune(Star):
     @filter.command("今日运势", alias={"jrys", "运势"})
     async def daily_fortune(self, event: AstrMessageEvent):
         """头像、每日吉凶宜忌与一言。"""
+        event.should_call_llm(True)
         date = today()
         uid = f"{event.get_platform_id()}:{event.get_sender_id()}"
         try:
@@ -97,6 +101,7 @@ class DailyFortune(Star):
                 data = await asyncio.to_thread(image.read_bytes)
                 url = await self.image_host.upload(data, date)
                 await send_markdown(event, {"url": url}, retries=self.image_host.retries, fortune=True)
+                event.stop_event()
             except Exception:
                 logger.exception("今日运势 Markdown 发送失败")
                 yield event.plain_result("今日运势 MD 发送失败，请检查图床配置或稍后重试。")
@@ -115,11 +120,13 @@ class DailyFortune(Star):
 
     @filter.command("运势原图", alias=set())
     async def fortune_original(self, event: AstrMessageEvent):
+        event.should_call_llm(True)
         async for result in self._original(event, "运势原图", self.service):
             yield result
 
     @filter.command("老婆原图", alias=set())
     async def wife_original(self, event: AstrMessageEvent):
+        event.should_call_llm(True)
         async for result in self._original(event, "老婆原图", self.wife):
             yield result
 
@@ -129,6 +136,9 @@ class DailyFortune(Star):
             image = await service.original(uid, today())
         except Exception:
             logger.exception("%s读取失败", command)
+            event.stop_event()
             return
         if image:
             yield event.image_result(str(image))
+        else:
+            event.stop_event()

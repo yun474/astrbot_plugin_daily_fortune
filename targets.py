@@ -18,7 +18,8 @@ def target_user(event, command):
             ignored.add(str(field(mention, "id", "")))
 
     # Official adapters can leave user mentions as markup inside Plain text.
-    texts = [field(raw, "content", ""), field(message, "message_str", "")]
+    # event.message_str has already had AstrBot's configured wake prefix removed.
+    texts = [field(event, "message_str", ""), field(raw, "content", ""), field(message, "message_str", "")]
     parts = []
     for component in field(message, "message", []) or []:
         if field(component, "type") == "Plain":

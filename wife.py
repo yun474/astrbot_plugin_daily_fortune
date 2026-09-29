@@ -146,9 +146,10 @@ def payload_for(event, item, fortune=False):
         f"作品：{md_text(item['work'])}\n"
     )
     image_url = item['url'].replace('(', '%28').replace(')', '%29')
+    ending = "请勿迷信，仅供参考" if fortune else "要好好对她哦~"
     content = (
         f'<qqbot-at-user id="{escape(str(event.get_sender_id()), quote=True)}" />\n'
-        + details + f"![图片]({image_url})\n"
+        + details + f"![图片]({image_url})\n\n> {ending}\n"
     )
     buttons = [{
         "id": key,

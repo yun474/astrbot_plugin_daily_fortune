@@ -49,6 +49,19 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
         image_result=lambda path: ("image", path),
         plain_result=lambda text: ("plain", text),
     )
+    event.should_call_llm = lambda value: setattr(event, "call_llm", value)
+    event.stop_event = lambda: setattr(event, "stopped", True)
+
+    async def dispatch(handler):
+        # Each invocation is a new incoming event; ordinary yields must remain sendable.
+        event.call_llm = False
+        event.stopped = False
+        results = []
+        async for result in handler(event):
+            assert not event.stopped
+            results.append(result)
+        assert event.call_llm is True
+        return results
     calls = []
 
     async def card(uid, day, avatar):
@@ -56,7 +69,7 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
         return tmp_path / "card.png"
 
     plugin.service.card = card
-    result = [x async for x in plugin.daily_fortune(event)]
+    result = await dispatch(plugin.daily_fortune)
     assert result == [("image", str(tmp_path / "card.png"))]
     assert calls == [("official-1:OPENID", "https://q.qlogo.cn/qqapp/123/OPENID/640")]
 
@@ -64,7 +77,7 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
         raise RuntimeError("browser unavailable")
 
     plugin.service.card = fail
-    result = [x async for x in plugin.daily_fortune(event)]
+    result = await dispatch(plugin.daily_fortune)
     assert result[0][0] == "plain"
     assert "宜：" in result[0][1] and "忌：" in result[0][1]
 
@@ -93,13 +106,13 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
     plugin.image_host.validate = lambda: None
     plugin.image_host.upload = upload
     monkeypatch.setattr(module, "send_markdown", send_md)
-    assert [x async for x in plugin.daily_wife(event)] == []
+    assert await dispatch(plugin.daily_wife) == []
     assert sent[0]["work"] == "原神"
     assert sent[0]["url"] == "https://host.example.com/image.png"
     plugin.qq_fortune_markdown = True
     (tmp_path / "card.png").write_bytes(default_avatar())
     plugin.service.card = card
-    assert [x async for x in plugin.daily_fortune(event)] == []
+    assert await dispatch(plugin.daily_fortune) == []
     assert sent[-1] == {"url": "https://host.example.com/image.png"}
     assert len(uploads) == 2
 
@@ -107,8 +120,8 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
         raise ValueError("图床未配置")
 
     plugin.image_host.upload = upload_fail
-    failed_fortune = [x async for x in plugin.daily_fortune(event)]
-    failed_wife = [x async for x in plugin.daily_wife(event)]
+    failed_fortune = await dispatch(plugin.daily_fortune)
+    failed_wife = await dispatch(plugin.daily_wife)
     assert failed_fortune[0][0] == failed_wife[0][0] == "plain"
     assert "图床配置" in failed_fortune[0][1] and "图床配置" in failed_wife[0][1]
     assert len(sent) == 2  # Never send the original remote URL after upload failure.
@@ -122,7 +135,7 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
         return tmp_path / "wife.png"
 
     plugin.wife.card = wife_card
-    result = [x async for x in plugin.daily_wife(event)]
+    result = await dispatch(plugin.daily_wife)
     assert result == [("image", str(tmp_path / "wife.png"))]
     event.get_platform_name = lambda: "qq_official"
     event.message_obj.raw_message.author.member_openid = "123456"
@@ -132,10 +145,10 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
         return tmp_path / "wife.png"
 
     plugin.wife.card = official_card
-    assert [x async for x in plugin.daily_wife(event)] == [("image", str(tmp_path / "wife.png"))]
+    assert await dispatch(plugin.daily_wife) == [("image", str(tmp_path / "wife.png"))]
     assert len(sent) == 2
     plugin.wife.card = fail
-    result = [x async for x in plugin.daily_wife(event)]
+    result = await dispatch(plugin.daily_wife)
     assert len(result) == 1 and result[0][0] == "plain"
     assert "芙宁娜" in result[0][1] and "图片生成失败" in result[0][1]
 
@@ -149,19 +162,19 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
     event.get_platform_name = lambda: "qq_official"
     event.message_obj.raw_message = {"content": '<@BOT> /运势原图 <qqbot-at-user id="OTHER" />'}
     event.message_obj.self_id = "BOT"
-    assert [x async for x in plugin.fortune_original(event)] == [("image", str(tmp_path / "original.png"))]
+    assert await dispatch(plugin.fortune_original) == [("image", str(tmp_path / "original.png"))]
     assert original_calls[-1] == "official-1:OTHER"
     event.message_obj.raw_message = {"content": '<@BOT> /老婆原图'}
-    assert [x async for x in plugin.wife_original(event)] == [("image", str(tmp_path / "original.png"))]
+    assert await dispatch(plugin.wife_original) == [("image", str(tmp_path / "original.png"))]
     assert original_calls[-1] == "official-1:123456"
 
     async def missing(*args):
         return None
 
     plugin.wife.original = missing
-    assert [x async for x in plugin.wife_original(event)] == []
+    assert await dispatch(plugin.wife_original) == []
     plugin.service.original = fail
-    assert [x async for x in plugin.fortune_original(event)] == []
+    assert await dispatch(plugin.fortune_original) == []
     sweeps = []
     completed = asyncio.Event()
 
