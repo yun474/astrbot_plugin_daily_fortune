@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import json
+from copy import deepcopy
 from datetime import date
 from urllib.parse import quote, urlsplit
 
@@ -25,6 +26,37 @@ S3_PROVIDERS = {
     "其他 S3 兼容存储": ("us-east-1", "path", "s3v4"),
 }
 
+PROVIDER_SECTIONS = {
+    "自定义 HTTP": "http", "兰空 Lsky Pro V2": "lsky", "Cloudflare R2": "r2",
+    "AWS S3": "aws", "阿里云 OSS": "oss", "腾讯云 COS": "cos",
+    "七牛云 Kodo": "qiniu", "MinIO": "minio", "Backblaze B2": "b2",
+    "DigitalOcean Spaces": "spaces", "其他 S3 兼容存储": "s3",
+}
+HTTP_FIELDS = ("upload_url", "authorization", "file_field", "url_path")
+S3_FIELDS = ("endpoint", "bucket", "access_key_id", "secret_access_key", "region",
+             "public_base_url", "key_prefix", "addressing_style")
+
+
+def migrate_host_config(config):
+    """Move the old shared fields to the selected provider once, before saving."""
+    host = config.get("image_host", {})
+    provider = host.get("provider", "自定义 HTTP")
+    section = PROVIDER_SECTIONS.get(provider)
+    defaults = {key: "" for key in (*HTTP_FIELDS, *S3_FIELDS)}
+    defaults.update(file_field="file", url_path="data.links.url",
+                    key_prefix="daily-fortune", addressing_style="auto")
+    if not section or not any(host.get(key, value) != value for key, value in defaults.items()):
+        return False
+    fields = HTTP_FIELDS if provider in HTTP_PROVIDERS else S3_FIELDS
+    if provider == "兰空 Lsky Pro V2":
+        fields = HTTP_FIELDS[:2]
+    target = host.setdefault(section, {})
+    # Schema defaults may already be present; an existing destination wins.
+    if not target.get(fields[0]):
+        target.update({key: host[key] for key in fields if key in host})
+    host.update(defaults)
+    return True
+
 
 def http_url(value):
     if not isinstance(value, str):
@@ -40,8 +72,14 @@ def http_url(value):
 class ImageHost:
     def __init__(self, service):
         self.service = service
-        self.config = dict(service.config.get("image_host", {}))
-        self.provider = self.config.get("provider", "自定义 HTTP")
+        config = {"image_host": deepcopy(service.config.get("image_host", {}))}
+        migrate_host_config(config)
+        host = config["image_host"]
+        self.provider = host.get("provider", "自定义 HTTP")
+        self.config = dict(host.get(PROVIDER_SECTIONS.get(self.provider), {}))
+        self.config.update(provider=self.provider,
+                           retry_count=host.get("retry_count", 3),
+                           timeout_seconds=host.get("timeout_seconds", 30))
         self.retries = number(self.config, "retry_count", 3, 0, 10)
         self.timeout = number(self.config, "timeout_seconds", 30, 5, 120)
         self._lock = asyncio.Lock()

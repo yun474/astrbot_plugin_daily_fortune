@@ -11,7 +11,7 @@ from .fortune import draw, text_result, today
 from .service import FortuneService
 from .targets import target_user
 from .settings import number
-from .hosting import ImageHost
+from .hosting import ImageHost, migrate_host_config
 from .service import normalize_image
 from .wife import WifeService, send_markdown, supports_markdown
 
@@ -25,6 +25,8 @@ logger = logging.getLogger("astrbot")
 class DailyFortune(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
+        if migrate_host_config(config):
+            config.save_config()
         self.service = FortuneService(
             config, StarTools.get_data_dir("astrbot_plugin_daily_fortune")
         )

@@ -7,7 +7,9 @@ from urllib.parse import parse_qs, quote, urlsplit
 import pytest
 from aiohttp import web
 
-from daily_fortune_test.hosting import HTTP_PROVIDERS, S3_PROVIDERS, ImageHost
+from daily_fortune_test.hosting import (
+    HTTP_PROVIDERS, S3_PROVIDERS, PROVIDER_SECTIONS, ImageHost, migrate_host_config,
+)
 from daily_fortune_test.service import FortuneService, default_avatar
 from daily_fortune_test.wife import send_markdown
 from test_wife import event, ITEM
@@ -276,3 +278,69 @@ def test_provider_dropdown_covers_all_adapters():
     provider = schema['image_host']['items']['provider']
     assert provider['default'] == '自定义 HTTP'
     assert set(provider['options']) == HTTP_PROVIDERS | S3_PROVIDERS.keys()
+
+
+@pytest.mark.parametrize('provider,section', PROVIDER_SECTIONS.items())
+def test_only_selected_provider_settings_are_visible(provider, section):
+    from pathlib import Path
+    schema = json.loads((Path(__file__).parents[1] / '_conf_schema.json').read_text('utf-8'))
+    items = schema['image_host']['items']
+    # AstrBot evaluates conditions against siblings using exact equality.
+    visible = {key for key, item in items.items() if not item.get('invisible')
+               and all({'provider': provider}.get(k) == v
+                       for k, v in item.get('condition', {}).items())}
+    assert visible == {'provider', section, 'retry_count', 'timeout_seconds'}
+    fields = set(items[section]['items'])
+    if provider in S3_PROVIDERS:
+        assert 'endpoint' in fields and 'upload_url' not in fields
+        assert 'authorization' not in fields
+    else:
+        assert 'upload_url' in fields and 'endpoint' not in fields
+        assert ('file_field' in fields) == (provider == '自定义 HTTP')
+
+
+def test_provider_switch_preserves_settings_and_cache_identity(tmp_path):
+    host = {'provider': 'Cloudflare R2', 'r2': storage_config(),
+            'http': {'upload_url': 'https://http.example.com/upload'}}
+    config = {'image_host': host}
+    first = ImageHost(FortuneService(config, tmp_path))
+    host['provider'] = '自定义 HTTP'
+    http = ImageHost(FortuneService(config, tmp_path))
+    assert http.config['upload_url'] == 'https://http.example.com/upload'
+    assert 'endpoint' not in http.config
+    host['http']['authorization'] = 'Bearer another-token'
+    host['provider'] = 'Cloudflare R2'
+    switched_back = ImageHost(FortuneService(config, tmp_path))
+    assert switched_back.config['endpoint'] == 'https://storage.example.com'
+    assert 'authorization' not in switched_back.config
+    assert switched_back._identity == first._identity
+
+
+@pytest.mark.parametrize('provider,section', PROVIDER_SECTIONS.items())
+def test_legacy_migration_is_saved_once_without_overwriting_other_providers(provider, section):
+    from pathlib import Path
+    schema = json.loads((Path(__file__).parents[1] / '_conf_schema.json').read_text('utf-8'))
+    defaults = {k: item['default']
+                for k, item in schema['image_host']['items'][section]['items'].items()}
+    host = storage_config()
+    host.update(provider=provider, upload_url='https://old.example.com/upload',
+                authorization='Bearer old-token', **{section: defaults})
+    config = {'image_host': host}
+    assert migrate_host_config(config)
+    if provider in S3_PROVIDERS:
+        assert host[section]['secret_access_key'] == 'test-secret'
+        assert host[section]['endpoint'] == 'https://storage.example.com'
+    else:
+        assert host[section]['upload_url'] == 'https://old.example.com/upload'
+        assert host[section]['authorization'] == 'Bearer old-token'
+    assert host['endpoint'] == host['upload_url'] == host['secret_access_key'] == ''
+    assert not migrate_host_config(config)
+    host['provider'] = 'MinIO' if section != 'minio' else 'Cloudflare R2'
+    assert not migrate_host_config(config)
+
+
+def test_legacy_migration_does_not_replace_configured_section():
+    host = storage_config()
+    host['r2'] = {'endpoint': 'https://new.example.com', 'bucket': 'new-bucket'}
+    assert migrate_host_config({'image_host': host})
+    assert host['r2'] == {'endpoint': 'https://new.example.com', 'bucket': 'new-bucket'}
