@@ -4,7 +4,7 @@
   "msg_seq": 1,
   "force_verify_image_resource": true,
   "markdown": {
-    "content": "<qqbot-at-user id=\"用户的member_openid\" />\n今日运势\n![图片](https://your-image-host.example/fortune.png)\n\n> 请勿迷信，仅供参考\n"
+    "content": "<qqbot-at-user id=\"用户的member_openid\" />\n今日运势\n![图片 #900px #1600px](https://your-image-host.example/fortune.png)\n\n> 请勿迷信，仅供参考\n"
   },
   "keyboard": {
     "content": {

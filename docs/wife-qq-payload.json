@@ -4,7 +4,7 @@
   "msg_seq": 1,
   "force_verify_image_resource": true,
   "markdown": {
-    "content": "<qqbot-at-user id=\"用户的member_openid\" />\n您的今日老婆是：**芙宁娜**\n作品：原神\n![图片](https://your-image-host.example/wife.png)\n\n> 要好好对她哦~\n"
+    "content": "<qqbot-at-user id=\"用户的member_openid\" />\n您的今日老婆是：**芙宁娜**\n作品：原神\n![图片 #640px #960px](https://your-image-host.example/wife.png)\n\n> 要好好对她哦~\n"
   },
   "keyboard": {
     "content": {

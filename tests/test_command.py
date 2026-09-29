@@ -113,7 +113,8 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
     (tmp_path / "card.png").write_bytes(default_avatar())
     plugin.service.card = card
     assert await dispatch(plugin.daily_fortune) == []
-    assert sent[-1] == {"url": "https://host.example.com/image.png"}
+    assert sent[-1] == {"url": "https://host.example.com/image.png", "width": 128, "height": 128}
+    assert sent[0]['width'] == sent[0]['height'] == 128
     assert len(uploads) == 2
 
     async def upload_fail(*args):

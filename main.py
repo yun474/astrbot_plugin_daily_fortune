@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import io
 from contextlib import suppress
+from PIL import Image
 
 from astrbot.api import AstrBotConfig
 from astrbot.api.event import AstrMessageEvent, filter
@@ -72,12 +74,14 @@ class DailyFortune(Star):
                 picture = await self.service._download(item["url"])
                 stage = "压缩图片"
                 picture = await asyncio.to_thread(markdown_image, picture)
+                with Image.open(io.BytesIO(picture)) as decoded:
+                    width, height = decoded.size
                 stage = "图床上传"
                 logger.info("今日老婆 MD：开始上传，图片 %d 字节", len(picture))
                 url = await self.image_host.upload(picture, today())
                 stage = "QQ 发送"
                 logger.info("今日老婆 MD：图床地址已取得，开始 QQ 发送")
-                if await send_markdown(event, dict(item, url=url), retries=self.image_host.retries):
+                if await send_markdown(event, dict(item, url=url, width=width, height=height), retries=self.image_host.retries):
                     event.stop_event()
                     return
             except Exception:
@@ -109,12 +113,14 @@ class DailyFortune(Star):
             try:
                 data = await asyncio.to_thread(image.read_bytes)
                 data = await asyncio.to_thread(markdown_image, data)
+                with Image.open(io.BytesIO(data)) as decoded:
+                    width, height = decoded.size
                 stage = "图床上传"
                 logger.info("今日运势 MD：开始上传，图片 %d 字节", len(data))
                 url = await self.image_host.upload(data, date)
                 stage = "QQ 发送"
                 logger.info("今日运势 MD：图床地址已取得，开始 QQ 发送")
-                if not await send_markdown(event, {"url": url}, retries=self.image_host.retries, fortune=True):
+                if not await send_markdown(event, {"url": url, "width": width, "height": height}, retries=self.image_host.retries, fortune=True):
                     raise RuntimeError("当前事件不支持 QQ Markdown")
                 event.stop_event()
             except Exception:

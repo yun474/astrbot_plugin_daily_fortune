@@ -18,3 +18,5 @@ MD 模式先将图片上传至配置的图床，再将返回的公网地址写�
 - [QQ 官方 Markdown 文档](https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/type/markdown.html)
 - [QQ 官方按钮文档](https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/trans/msg-btn.html)
 - [OlivOS 发送参数说明](https://doc.olivos.wiki/DevPlugin/API/)：包含 `force_verify_image_resource` 参数说明；本次未成功从 QQ 官方发送接口页面核对该字段，仍需真实平台验证。
+
+图片必须按 QQ 官方示例写成 `![图片 #宽px #高px](URL)`，插件读取压缩后上传文件的真实尺寸。示例文件里的尺寸仅为占位示例。QQ 返回消息 ID 只能确认平台接收，不能当作客户端已成功显示图片的证明。

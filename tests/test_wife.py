@@ -16,7 +16,7 @@ def event(request, group=True):
               bot=NS(api=NS(_http=NS(request=request))))
 
 
-ITEM = {"name": "芙宁娜", "work": "原神", "url": "https://example.com/image.jpg"}
+ITEM = {"name": "芙宁娜", "work": "原神", "url": "https://example.com/image.jpg", "width": 640, "height": 960}
 
 
 def test_catalog_and_payload():
@@ -27,10 +27,23 @@ def test_catalog_and_payload():
     assert payload["force_verify_image_resource"] is True
     assert payload["markdown"]["content"].endswith("\n\n> 要好好对她哦~\n")
     assert [b["action"]["data"] for b in payload["keyboard"]["content"]["rows"][0]["buttons"]] == ["今日老婆", "今日运势"]
-    fortune = payload_for(event(None), {"url": ITEM["url"]}, fortune=True)
+    assert '![图片 #640px #960px](https://example.com/image.jpg)' in payload['markdown']['content']
+    fortune = payload_for(event(None), dict(ITEM, width=900, height=1600), fortune=True)
+    assert '![图片 #900px #1600px]' in fortune['markdown']['content']
     assert fortune["markdown"]["content"].startswith('<qqbot-at-user id="USER" />')
     assert fortune["markdown"]["content"].endswith("\n\n> 请勿迷信，仅供参考\n")
     assert fortune["keyboard"] == payload["keyboard"]
+
+
+@pytest.mark.parametrize('width,height', [(0, 960), (640, -1), ('640', 960), (True, 960)])
+def test_invalid_markdown_dimensions_are_rejected(width, height):
+    with pytest.raises(ValueError, match='实际宽高'):
+        payload_for(event(None), dict(ITEM, width=width, height=height))
+
+
+def test_markdown_image_url_parentheses_remain_encoded():
+    payload = payload_for(event(None), dict(ITEM, url='https://example.com/a(b).jpg'))
+    assert '![图片 #640px #960px](https://example.com/a%28b%29.jpg)' in payload['markdown']['content']
 
 
 @pytest.mark.asyncio

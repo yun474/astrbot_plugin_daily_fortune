@@ -145,6 +145,9 @@ def md_text(value):
 
 
 def payload_for(event, item, fortune=False):
+    width, height = item["width"], item["height"]
+    if type(width) is not int or type(height) is not int or width <= 0 or height <= 0:
+        raise ValueError("QQ Markdown 图片需要有效的实际宽高")
     details = "今日运势\n" if fortune else (
         f"您的今日老婆是：**{md_text(item['name'])}**\n"
         f"作品：{md_text(item['work'])}\n"
@@ -153,7 +156,7 @@ def payload_for(event, item, fortune=False):
     ending = "请勿迷信，仅供参考" if fortune else "要好好对她哦~"
     content = (
         f'<qqbot-at-user id="{escape(str(event.get_sender_id()), quote=True)}" />\n'
-        + details + f"![图片]({image_url})\n\n> {ending}\n"
+        + details + f"![图片 #{width}px #{height}px]({image_url})\n\n> {ending}\n"
     )
     buttons = [{
         "id": key,
@@ -205,7 +208,7 @@ async def send_markdown(event, item, retries=3, fortune=False):
                 raise RuntimeError(str(result))
             if not result.get("id"):
                 raise RuntimeError("QQ 未返回消息 ID，发送结果不明")
-            logger.info("QQ Markdown：平台已返回消息 ID，发送成功")
+            logger.info("QQ Markdown：平台已接收并返回消息 ID；客户端图片展示仍以实际结果为准")
             return True
         except asyncio.CancelledError:
             logger.warning("QQ Markdown：请求被取消，发送结果不明")
