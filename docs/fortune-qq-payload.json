@@ -2,8 +2,8 @@
   "msg_type": 2,
   "msg_id": "收到的消息ID",
   "msg_seq": 1,
-  "force_verify_image_resource": true,
   "markdown": {
+    "force_verify_image_resource": true,
     "content": "<qqbot-at-user id=\"用户的member_openid\" />\n今日运势\n![图片 #800px #1200px](https://your-image-host.example/fortune.jpg)\n\n> 请勿迷信，仅供参考\n"
   },
   "keyboard": {

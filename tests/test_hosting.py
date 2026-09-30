@@ -100,7 +100,7 @@ async def test_qq_image_retries_are_configurable(monkeypatch, retries):
 
     async def request(route, json):
         calls.append(json)
-        raise RuntimeError('image download failed')
+        return {'err_code': 40034004, 'message': '富媒体信息转存失败'}
 
     async def no_sleep(_):
         pass
@@ -109,7 +109,7 @@ async def test_qq_image_retries_are_configurable(monkeypatch, retries):
     with pytest.raises(RuntimeError):
         await send_markdown(event(request), ITEM, retries=retries, fortune=True)
     assert len(calls) == retries + 1
-    assert all(x['force_verify_image_resource'] for x in calls)
+    assert all(x['markdown']['force_verify_image_resource'] for x in calls)
     assert all(x == calls[0] for x in calls)
     assert '今日运势' in calls[0]['markdown']['content']
 

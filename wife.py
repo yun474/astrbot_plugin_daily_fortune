@@ -10,6 +10,8 @@ from datetime import date as Date, timedelta
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
+import aiohttp
+
 from .avatar import field
 from .renderer import ASSETS, build_wife_html
 from .service import normalize_image
@@ -165,16 +167,43 @@ def payload_for(event, item, fortune=False):
                    "enter": True, "unsupport_tips": "请手动发送" + label},
     } for key, label in (("wife", "今日老婆"), ("fortune", "今日运势"))]
     return {"msg_type": 2, "msg_id": event.message_obj.message_id, "msg_seq": 1,
-            "force_verify_image_resource": True, "markdown": {"content": content},
+            "markdown": {"content": content, "force_verify_image_resource": True},
             "keyboard": {"content": {"rows": [{"buttons": buttons}]}}}
 
 
+class QQSendError(RuntimeError):
+    def __init__(self, status, data, trace_id):
+        self.code = str(data.get("err_code", data.get("code", "")))
+        super().__init__(f"QQ 发送失败：HTTP {status}，错误码 {self.code or '未知'}："
+                         f"{data.get('message', '无错误描述')}，trace_id={trace_id or '无'}")
+
+
 def image_failure(error):
-    """Only explicit resource failures are retryable, not ambiguous timeouts."""
-    text = str(error).lower()
-    return (any(word in text for word in ("image", "图片"))
-            and any(word in text for word in ("download", "fetch", "transfer", "verify", "拉取", "转存", "下载", "校验"))
-            and any(word in text for word in ("fail", "error", "失败", "不可用")))
+    """Only definite image-transfer errors are safe to resend."""
+    return isinstance(error, QQSendError) and error.code in {"304010", "40034004"}
+
+
+async def _request_markdown(http, route, payload):
+    # Reuse botpy's token/session, but retain error codes its response handler drops.
+    await http.check_session()
+    route.is_sandbox = http.is_sandbox
+    async with http._session.request(
+        method=route.method, url=route.url, headers=http._headers, json=payload,
+        timeout=aiohttp.ClientTimeout(total=QQ_SEND_TIMEOUT), allow_redirects=False,
+    ) as response:
+        try:
+            result = await response.json(content_type=None)
+        except ValueError:
+            raise RuntimeError(f"QQ 响应不是有效 JSON（HTTP {response.status}），发送结果不明") from None
+        if not isinstance(result, dict):
+            raise RuntimeError(f"QQ 响应不是 JSON 对象（HTTP {response.status}），发送结果不明")
+        code = result.get("err_code", result.get("code"))
+        if not 200 <= response.status < 300 or code not in (None, 0, "0"):
+            trace_id = result.get("trace_id") or response.headers.get("X-Tps-trace-ID")
+            raise QQSendError(response.status, result, trace_id)
+        if not result.get("id"):
+            raise RuntimeError("QQ 未返回消息 ID，发送结果不明")
+        return result
 
 
 def supports_markdown(event):
@@ -198,16 +227,11 @@ async def send_markdown(event, item, retries=3, fortune=False):
     payload = payload_for(event, item, fortune)
     for attempt in range(retries + 1):
         try:
-            logger.info("QQ Markdown：开始请求，尝试 %d/%d，超时 %d 秒", attempt + 1, retries + 1, QQ_SEND_TIMEOUT)
-            result = await asyncio.wait_for(
-                event.bot.api._http.request(route, json=payload), timeout=QQ_SEND_TIMEOUT
+            logger.info("QQ Markdown：开始请求，尝试 %d/%d，超时 %d 秒，markdown.force_verify_image_resource=%s",
+                        attempt + 1, retries + 1, QQ_SEND_TIMEOUT, payload["markdown"]["force_verify_image_resource"])
+            await asyncio.wait_for(
+                _request_markdown(event.bot.api._http, route, payload), timeout=QQ_SEND_TIMEOUT
             )
-            if not isinstance(result, dict):
-                raise RuntimeError("QQ 消息发送结果不明")
-            if result.get("code") not in (None, 0):
-                raise RuntimeError(str(result))
-            if not result.get("id"):
-                raise RuntimeError("QQ 未返回消息 ID，发送结果不明")
             logger.info("QQ Markdown：平台已接收并返回消息 ID；客户端图片展示仍以实际结果为准")
             return True
         except asyncio.CancelledError:
@@ -220,5 +244,6 @@ async def send_markdown(event, item, retries=3, fortune=False):
             logger.error("QQ Markdown：请求失败（%s）：%s", type(exc).__name__, exc)
             if attempt >= retries or not image_failure(exc):
                 raise
+            logger.warning("QQ Markdown：图片转存失败，1 秒后重试（%d/%d）", attempt + 1, retries)
             await asyncio.sleep(1)
     return False

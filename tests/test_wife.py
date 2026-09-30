@@ -3,6 +3,7 @@ import json
 import os
 import time
 from types import SimpleNamespace as NS
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -11,9 +12,27 @@ from daily_fortune_test.service import FortuneService, default_avatar
 
 
 def event(request, group=True):
+    class Session:
+        def request(self, method, url, *, json, **kwargs):
+            class Response:
+                status = 200
+                headers = {}
+
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, *args):
+                    pass
+
+                async def json(self, **kwargs):
+                    return await request(NS(url=url), json)
+
+            return Response()
+
     raw = NS(group_openid="GROUP" if group else None, author=NS(user_openid="USER"))
+    http = NS(check_session=AsyncMock(), is_sandbox=False, _session=Session(), _headers={})
     return NS(get_sender_id=lambda: "USER", message_obj=NS(raw_message=raw, message_id="MSG"),
-              bot=NS(api=NS(_http=NS(request=request))))
+              bot=NS(api=NS(_http=http)))
 
 
 ITEM = {"name": "芙宁娜", "work": "原神", "url": "https://example.com/image.jpg", "width": 640, "height": 960}
@@ -24,7 +43,8 @@ def test_catalog_and_payload():
     payload = payload_for(event(None), ITEM)
     assert payload["markdown"]["content"].startswith('<qqbot-at-user id="USER" />')
     assert "作品：原神" in payload["markdown"]["content"]
-    assert payload["force_verify_image_resource"] is True
+    assert payload["markdown"]["force_verify_image_resource"] is True
+    assert "force_verify_image_resource" not in payload
     assert payload["markdown"]["content"].endswith("\n\n> 要好好对她哦~\n")
     assert [b["action"]["data"] for b in payload["keyboard"]["content"]["rows"][0]["buttons"]] == ["今日老婆", "今日运势"]
     assert '![图片 #640px #960px](https://example.com/image.jpg)' in payload['markdown']['content']
@@ -33,6 +53,7 @@ def test_catalog_and_payload():
     assert fortune["markdown"]["content"].startswith('<qqbot-at-user id="USER" />')
     assert fortune["markdown"]["content"].endswith("\n\n> 请勿迷信，仅供参考\n")
     assert fortune["keyboard"] == payload["keyboard"]
+    assert fortune["markdown"]["force_verify_image_resource"] is True
 
 
 @pytest.mark.parametrize('width,height', [(0, 960), (640, -1), ('640', 960), (True, 960)])
@@ -76,7 +97,7 @@ async def test_retry_explicit_image_failure(monkeypatch, group):
     async def request(route, json):
         calls.append((route.url, json))
         if len(calls) == 1:
-            raise RuntimeError("image download failed")
+            return {"err_code": 40034004, "message": "富媒体信息转存失败"}
         return {"id": "SENT"}
 
     async def sleep(_):
