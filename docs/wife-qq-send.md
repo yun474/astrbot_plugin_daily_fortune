@@ -8,7 +8,7 @@
 
 `force_verify_image_resource: true` 放在 `markdown` 对象内，与 `content` 同级。QQ 官方群聊、单聊发送接口都将它定义为 `MessageMarkdown` 的字段；放在请求体顶层不符合该结构。首次发送就开启，图片转存失败时由平台返回错误并阻止发送。
 
-已实现的重试策略：仅在平台返回图片转存错误码 `304010`／`40034004` 时，等待 1 秒后最多重试三次（不含首次请求，可通过 image_host.retry_count 修改）；每次请求均保持 `markdown.force_verify_image_resource=true`，保持同一角色、作品和 URL，不重新抽取。明确失败后的重试保留原消息 ID 与发送序号。不对超时这种结果不明的请求盲目重发，不对权限、参数错误重试。发送复用 botpy 管理的鉴权与 HTTP 会话，直接解析响应以保留 `err_code`（兼容 `code`）、HTTP 状态和 trace_id，避免 botpy 异常丢失错误码；不再按错误文案猜测是否重试。
+已实现的重试策略：仅在平台返回图片转存错误码 `304010`／`40034004`／`40034141` 时，等待 1 秒后默认最多重试三次（不含首次请求，可通过 image_host.retry_count 修改）；每次请求均保持 `markdown.force_verify_image_resource=true`，保持同一角色、作品和 URL，不重新抽取。明确失败后的重试保留原消息 ID 与发送序号。不对超时这种结果不明的请求盲目重发，不对权限、参数错误重试。发送复用 botpy 管理的鉴权与 HTTP 会话，直接解析响应以保留 `err_code`（兼容 `code`）、HTTP 状态和 trace_id，避免 botpy 异常丢失错误码；不再按错误文案猜测是否重试。
 
 MD 模式先将图片上传至配置的图床，再将返回的公网地址写入请求。force_verify_image_resource 用于校验，不会让不可达地址变得可达。两个功能共用图床配置与重试次数。
 

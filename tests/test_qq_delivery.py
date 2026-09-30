@@ -37,7 +37,8 @@ async def qq_server(monkeypatch, handler, group=True):
 
 @pytest.mark.parametrize('group', [True, False])
 @pytest.mark.parametrize('fortune', [True, False])
-async def test_wire_payload_verifies_images_and_retries_platform_error(monkeypatch, caplog, group, fortune):
+@pytest.mark.parametrize('code', [40034004, 40034141])
+async def test_wire_payload_verifies_images_and_retries_platform_error(monkeypatch, caplog, group, fortune, code):
     calls = []
 
     async def handler(request):
@@ -47,7 +48,7 @@ async def test_wire_payload_verifies_images_and_retries_platform_error(monkeypat
         if not body['markdown'].get('force_verify_image_resource'):
             return web.json_response({'id': 'ACCEPTED_WITHOUT_IMAGE'})
         if len(calls) == 1:
-            return web.Response(text=json.dumps({'err_code': 40034004, 'message': 'resource unavailable',
+            return web.Response(text=json.dumps({'err_code': code, 'message': '图片转存失败，请重试',
                                                 'trace_id': 'image-transfer-trace'}),
                                 status=400, content_type='application/json', charset='utf-8')
         return web.json_response({'id': 'SENT'})
@@ -67,12 +68,15 @@ async def test_wire_payload_verifies_images_and_retries_platform_error(monkeypat
     assert body['markdown']['force_verify_image_resource'] is True
     assert 'force_verify_image_resource' not in body
     assert body['msg_id'] == 'MSG' and body['msg_seq'] == 1
-    assert '40034004' in caplog.text and 'image-transfer-trace' in caplog.text
+    assert str(code) in caplog.text and 'image-transfer-trace' in caplog.text
     assert '重试' in caplog.text
 
 
 @pytest.mark.parametrize('status,code_field,code,retries,expected', [
     (400, 'err_code', 40034004, 3, 4),
+    (400, 'err_code', 40034141, 10, 11),
+    (400, 'code', '40034141', 3, 4),
+    (400, 'err_code', 40034141, 0, 1),
     (400, 'code', 304010, 1, 2),
     (200, 'err_code', 40034004, 1, 2),
     (200, 'code', 304010, 0, 1),

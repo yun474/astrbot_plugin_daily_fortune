@@ -180,7 +180,7 @@ class QQSendError(RuntimeError):
 
 def image_failure(error):
     """Only definite image-transfer errors are safe to resend."""
-    return isinstance(error, QQSendError) and error.code in {"304010", "40034004"}
+    return isinstance(error, QQSendError) and error.code in {"304010", "40034004", "40034141"}
 
 
 async def _request_markdown(http, route, payload):

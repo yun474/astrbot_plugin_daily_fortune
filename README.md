@@ -226,7 +226,7 @@ Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤�
 
 运势 MD 上传完整运势卡，老婆 MD 下载选中的角色图片再上传。两个 MD 模式均在上传前转为 JPEG，最长边不超过 1600 像素，体积不超过 1 MiB；原图指令不受影响。相同图片在当天复用已上传地址；修改图床类型、桶、密钥、公网地址或路径前缀后不复用旧配置缓存。本地上传记录随图片缓存清理。对象存储按「前缀/日期/图片哈希.jpg」保存，图床上的远程图片需通过图床自身的保留策略清理。
 
-图床网络错误、429 和 5xx 响应，以及 QQ 图片转存错误码 `304010`／`40034004`，默认最多重试 3 次（共 4 次尝试）。鉴权错误、响应字段错误不重试；QQ 发送超时因结果不明也不自动重发。每次 QQ MD 请求都在 `markdown` 对象内设置 `force_verify_image_resource=true`；该字段不放在请求体顶层。字段层级依据 [QQ 官方群聊发送接口](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_groups_group_openid_messages.post.html) 与 [单聊发送接口](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_users_user_openid_messages.post.html) 的 `MessageMarkdown` 定义。
+图床网络错误、429 和 5xx 响应，以及 QQ 图片转存错误码 `304010`／`40034004`／`40034141`，默认最多重试 3 次（共 4 次尝试）。鉴权错误、响应字段错误不重试；QQ 发送超时因结果不明也不自动重发。每次 QQ MD 请求都在 `markdown` 对象内设置 `force_verify_image_resource=true`；该字段不放在请求体顶层。字段层级依据 [QQ 官方群聊发送接口](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_groups_group_openid_messages.post.html) 与 [单聊发送接口](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_users_user_openid_messages.post.html) 的 `MessageMarkdown` 定义。
 
 旧版已开启的老婆 MD 配置会保留，请补填图床或关闭该开关。未配置图床时不会使用源站链接发送 MD。图床设置的收起功能依赖 AstrBot 配置页对条件显示的支持，旧版面板可能始终展示这些字段。
 
@@ -272,7 +272,7 @@ img2/原神!芙宁娜.jpg
 
 MD 模式下请确认图床上传成功，返回的是公开图片直链而非预览网页，并检查 QQ 服务器是否能访问它。若机器人本身无法下载 GitHub 角色原图，可以将 `wife_image_base` 改为同路径镜像。
 
-插件已启用图片资源校验，图片转存错误码 `304010`／`40034004` 默认最多重试 3 次，可在图床配置中修改；失败后会保留当天角色，不会重新抽取。日志会依次记录上传图片字节数、取得图床地址、开始 QQ 请求和平台返回结果；QQ 请求日志包含 `markdown.force_verify_image_resource=True`，失败日志包含 HTTP 状态、平台错误码和 trace_id，并明确记录重试。最终失败时标出「下载原图」「压缩图片」「图床上传」或「QQ 发送」阶段。
+插件已启用图片资源校验，图片转存错误码 `304010`／`40034004`／`40034141` 默认最多重试 3 次，可在图床配置中修改；失败后会保留当天角色，不会重新抽取。日志会依次记录上传图片字节数、取得图床地址、开始 QQ 请求和平台返回结果；QQ 请求日志包含 `markdown.force_verify_image_resource=True`，失败日志包含 HTTP 状态、平台错误码和 trace_id，并明确记录重试。最终失败时标出「下载原图」「压缩图片」「图床上传」或「QQ 发送」阶段。
 
 QQ 请求超过 35 秒将报超时且不自动重发。取得图床地址只表示上传完成或命中缓存；平台返回消息 ID 只表示接收消息，都不能代替客户端实际图片展示检查。图片只显示「图片」文字时，请先更新至包含图片宽高标记的版本，再核对公开图片地址能否直接打开。
 
