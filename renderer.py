@@ -55,31 +55,63 @@ def build_wife_html(item: dict, picture: bytes, avatar: bytes) -> str:
 
 
 class CardRenderer:
+    IDLE_TIMEOUT = 120  # 浏览器空闲这么多秒就关掉，常驻的 Chromium 很吃内存
+
     def __init__(self, executable: str = ""):
         self.executable = executable
         self._playwright = None
         self._browser = None
         self._lock = asyncio.Lock()
+        self._active = 0
+        self._idle_task = None
 
     async def render(self, html: str, target: Path):
-        async with self._lock:
-            if self._playwright is None:
-                self._playwright = await async_playwright().start()
-            if self._browser is None or not self._browser.is_connected():
-                options = {"executable_path": self.executable} if self.executable else {}
-                self._browser = await self._playwright.chromium.launch(**options)
-            browser = self._browser
-        page = await browser.new_page(viewport={"width": 800, "height": 1500}, device_scale_factor=1)
+        self._active += 1
+        if self._idle_task:
+            self._idle_task.cancel()
+            self._idle_task = None
         try:
-            await page.set_content(html, wait_until="load")
-            await page.evaluate("async () => {await document.fonts.ready; await Promise.all([...document.images].map(i => i.decode()));}")
-            await page.locator("#card").screenshot(path=str(target), timeout=15000)
+            async with self._lock:
+                if self._playwright is None:
+                    self._playwright = await async_playwright().start()
+                if self._browser is None or not self._browser.is_connected():
+                    options = {"executable_path": self.executable} if self.executable else {}
+                    self._browser = await self._playwright.chromium.launch(**options)
+                browser = self._browser
+            page = await browser.new_page(viewport={"width": 800, "height": 1500}, device_scale_factor=1)
+            try:
+                await page.set_content(html, wait_until="load")
+                await page.evaluate("async () => {await document.fonts.ready; await Promise.all([...document.images].map(i => i.decode()));}")
+                await page.locator("#card").screenshot(path=str(target), timeout=15000)
+            finally:
+                await page.close()
         finally:
-            await page.close()
+            self._active -= 1
+            if not self._active and self._browser:
+                self._idle_task = asyncio.create_task(self._close_when_idle())
+
+    async def _close_when_idle(self):
+        await asyncio.sleep(self.IDLE_TIMEOUT)
+        async with self._lock:
+            if self._active:
+                return
+            # 已经开始关了就别被新请求打断，新请求会等锁再重新启动浏览器
+            self._idle_task = None
+            await self._shutdown()
 
     async def close(self):
-        if self._browser:
-            await self._browser.close()
-        if self._playwright:
-            await self._playwright.stop()
+        if self._idle_task:
+            self._idle_task.cancel()
+            self._idle_task = None
+        async with self._lock:
+            await self._shutdown()
+
+    async def _shutdown(self):
+        browser, playwright = self._browser, self._playwright
         self._browser = self._playwright = None
+        try:
+            if browser:
+                await browser.close()
+        finally:
+            if playwright:
+                await playwright.stop()
