@@ -1,24 +1,33 @@
-import importlib
 import asyncio
+import importlib
 import sys
-from types import ModuleType, SimpleNamespace as NS
-from daily_fortune_test.service import default_avatar
+from types import ModuleType
+from types import SimpleNamespace as NS
 
 import pytest
+from daily_fortune_test.service import default_avatar
 
 
 @pytest.mark.asyncio
-async def test_command_returns_image_and_plain_fallback_without_nickname(monkeypatch, tmp_path):
+async def test_command_returns_image_and_plain_fallback_without_nickname(
+    monkeypatch, tmp_path
+):
     # Minimal public AstrBot contracts; this is not a live platform send test.
     api = ModuleType("astrbot.api")
     api.AstrBotConfig = dict
     event_api = ModuleType("astrbot.api.event")
     event_api.AstrMessageEvent = object
     commands = []
+    priorities = {}
 
-    def command(name, alias):
+    def command(name, alias, *, priority=0):
         commands.append((name, alias))
-        return lambda fn: fn
+
+        def register(fn):
+            priorities[fn.__name__] = priority
+            return fn
+
+        return register
 
     event_api.filter = NS(command=command)
     star_api = ModuleType("astrbot.api.star")
@@ -53,15 +62,32 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
     event.stop_event = lambda: setattr(event, "stopped", True)
 
     async def dispatch(handler):
-        # Each invocation is a new incoming event; ordinary yields must remain sendable.
+        # Model a default-priority listener registered before this plugin. It
+        # requests an LLM explicitly, bypassing should_call_llm's default gate.
         event.call_llm = False
         event.stopped = False
         results = []
-        async for result in handler(event):
-            assert not event.stopped
-            results.append(result)
+        llm_requests = []
+
+        async def chat_listener(event):
+            llm_requests.append("plugin request")
+            yield ("plain", "unexpected LLM reply")
+
+        handlers = [(0, chat_listener), (priorities[handler.__name__], handler)]
+        for _, callback in sorted(handlers, key=lambda item: -item[0]):
+            if event.stopped:
+                break
+            async for result in callback(event):
+                # Stopping before yield would swallow this reply in AstrBot.
+                assert not event.stopped
+                results.append(result)
+        if not event.stopped and not results and not event.call_llm:
+            llm_requests.append("default request")
+        assert llm_requests == []
         assert event.call_llm is True
+        assert event.stopped
         return results
+
     calls = []
 
     async def card(uid, day, avatar):
@@ -83,6 +109,11 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
 
     async def select(uid, day):
         return {"name": "芙宁娜", "work": "原神", "url": "https://example.com/wife.jpg"}
+
+    plugin.wife.select = fail
+    assert await dispatch(plugin.daily_wife) == [
+        ("plain", "角色图库暂时无法读取，请稍后再试。")
+    ]
 
     sent = []
 
@@ -113,8 +144,12 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
     (tmp_path / "card.png").write_bytes(default_avatar())
     plugin.service.card = card
     assert await dispatch(plugin.daily_fortune) == []
-    assert sent[-1] == {"url": "https://host.example.com/image.png", "width": 128, "height": 128}
-    assert sent[0]['width'] == sent[0]['height'] == 128
+    assert sent[-1] == {
+        "url": "https://host.example.com/image.png",
+        "width": 128,
+        "height": 128,
+    }
+    assert sent[0]["width"] == sent[0]["height"] == 128
     assert len(uploads) == 2
 
     async def upload_fail(*args):
@@ -161,18 +196,28 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(monkeyp
 
     plugin.service.original = plugin.wife.original = original
     event.get_platform_name = lambda: "qq_official"
-    event.message_obj.raw_message = {"content": '<@BOT> /运势原图 <qqbot-at-user id="OTHER" />'}
+    event.message_obj.raw_message = {
+        "content": '<@BOT> /运势原图 <qqbot-at-user id="OTHER" />'
+    }
     event.message_obj.self_id = "BOT"
-    assert await dispatch(plugin.fortune_original) == [("image", str(tmp_path / "original.png"))]
+    assert await dispatch(plugin.fortune_original) == [
+        ("image", str(tmp_path / "original.png"))
+    ]
     assert original_calls[-1] == "official-1:OTHER"
-    event.message_obj.raw_message = {"content": '<@BOT> /老婆原图'}
-    assert await dispatch(plugin.wife_original) == [("image", str(tmp_path / "original.png"))]
+    event.message_obj.raw_message = {"content": "<@BOT> /老婆原图"}
+    assert await dispatch(plugin.wife_original) == [
+        ("image", str(tmp_path / "original.png"))
+    ]
     assert original_calls[-1] == "official-1:123456"
 
     async def missing(*args):
         return None
 
     plugin.wife.original = missing
+    assert await dispatch(plugin.wife_original) == []
+    plugin.service.original = missing
+    assert await dispatch(plugin.fortune_original) == []
+    plugin.wife.original = fail
     assert await dispatch(plugin.wife_original) == []
     plugin.service.original = fail
     assert await dispatch(plugin.fortune_original) == []

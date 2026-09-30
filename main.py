@@ -1,27 +1,29 @@
 import asyncio
-import logging
 import io
+import logging
 from contextlib import suppress
-from PIL import Image
 
 from astrbot.api import AstrBotConfig
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, StarTools, register
+from PIL import Image
 
 from .avatar import avatar_url
 from .fortune import draw, text_result, today
-from .service import FortuneService
-from .targets import target_user
-from .settings import number
 from .hosting import ImageHost, migrate_host_config
-from .service import markdown_image
+from .service import FortuneService, markdown_image
+from .settings import number
+from .targets import target_user
 from .wife import WifeService, send_markdown, supports_markdown
 
 logger = logging.getLogger("astrbot")
 
 
 @register(
-    "astrbot_plugin_daily_fortune", "yun474", "今日运势与二次元老婆", "0.2.1",
+    "astrbot_plugin_daily_fortune",
+    "yun474",
+    "今日运势与二次元老婆",
+    "0.2.2",
     "https://github.com/yun474/astrbot_plugin_daily_fortune",
 )
 class DailyFortune(Star):
@@ -36,7 +38,9 @@ class DailyFortune(Star):
         self.qq_wife_markdown = bool(config.get("qq_wife_markdown", False))
         self.qq_fortune_markdown = bool(config.get("qq_fortune_markdown", False))
         self.image_host = ImageHost(self.service)
-        self.cleanup_interval = number(config, "cache_cleanup_interval_hours", 6, 1, 168) * 3600
+        self.cleanup_interval = (
+            number(config, "cache_cleanup_interval_hours", 6, 1, 168) * 3600
+        )
         self._cleanup_task = None
 
     async def initialize(self):
@@ -48,14 +52,18 @@ class DailyFortune(Star):
             try:
                 await service.cleanup(today())
             except Exception:
-                logger.exception("%s 缓存清理失败，下个周期重试", type(service).__name__)
+                logger.exception(
+                    "%s 缓存清理失败，下个周期重试", type(service).__name__
+                )
 
     async def _cleanup_loop(self):
         while True:
             await asyncio.sleep(self.cleanup_interval)
             await self._cleanup_once()
 
-    @filter.command("今日老婆", alias={"jrlp", "抽老婆"})
+    # Run before default-priority chat listeners; stop only after yielding a reply
+    # so AstrBot's response stage can still deliver it.
+    @filter.command("今日老婆", alias={"jrlp", "抽老婆"}, priority=1)
     async def daily_wife(self, event: AstrMessageEvent):
         """抽取当天的二次元角色，QQ 官方群聊和私聊使用原生 Markdown。"""
         # AstrBot's True means suppress its default LLM request (despite the name).
@@ -66,6 +74,7 @@ class DailyFortune(Star):
         except Exception:
             logger.exception("今日老婆角色获取失败")
             yield event.plain_result("角色图库暂时无法读取，请稍后再试。")
+            event.stop_event()
             return
         if self.qq_wife_markdown and supports_markdown(event):
             stage = "下载原图"
@@ -81,22 +90,33 @@ class DailyFortune(Star):
                 url = await self.image_host.upload(picture, today())
                 stage = "QQ 发送"
                 logger.info("今日老婆 MD：图床地址已取得，开始 QQ 发送")
-                if await send_markdown(event, dict(item, url=url, width=width, height=height), retries=self.image_host.retries):
+                if await send_markdown(
+                    event,
+                    dict(item, url=url, width=width, height=height),
+                    retries=self.image_host.retries,
+                ):
                     event.stop_event()
                     return
             except Exception:
                 logger.exception("今日老婆 Markdown 失败，阶段：%s", stage)
-                yield event.plain_result(f"今日老婆 MD 失败（{stage}），请查看日志；当天角色已保留。图床配置与 QQ 发送分别检查。")
+                yield event.plain_result(
+                    f"今日老婆 MD 失败（{stage}），请查看日志；当天角色已保留。图床配置与 QQ 发送分别检查。"
+                )
+                event.stop_event()
                 return
         try:
             image = await self.wife.card(uid, item, avatar_url(event))
         except Exception:
             logger.exception("今日老婆图片生成失败，请检查图源和浏览器配置")
-            yield event.plain_result(f"您的今日老婆是：{item['name']}\n作品：{item['work']}\n图片生成失败，请稍后重试。")
+            yield event.plain_result(
+                f"您的今日老婆是：{item['name']}\n作品：{item['work']}\n图片生成失败，请稍后重试。"
+            )
+            event.stop_event()
             return
         yield event.image_result(str(image))
+        event.stop_event()
 
-    @filter.command("今日运势", alias={"jrys", "运势"})
+    @filter.command("今日运势", alias={"jrys", "运势"}, priority=1)
     async def daily_fortune(self, event: AstrMessageEvent):
         """头像、每日吉凶宜忌与一言。"""
         event.should_call_llm(True)
@@ -107,6 +127,7 @@ class DailyFortune(Star):
         except Exception:
             logger.exception("今日运势图片生成失败，请检查浏览器和字体配置")
             yield event.plain_result(text_result(draw(uid, date)))
+            event.stop_event()
             return
         if self.qq_fortune_markdown and supports_markdown(event):
             stage = "压缩图片"
@@ -120,14 +141,23 @@ class DailyFortune(Star):
                 url = await self.image_host.upload(data, date)
                 stage = "QQ 发送"
                 logger.info("今日运势 MD：图床地址已取得，开始 QQ 发送")
-                if not await send_markdown(event, {"url": url, "width": width, "height": height}, retries=self.image_host.retries, fortune=True):
+                if not await send_markdown(
+                    event,
+                    {"url": url, "width": width, "height": height},
+                    retries=self.image_host.retries,
+                    fortune=True,
+                ):
                     raise RuntimeError("当前事件不支持 QQ Markdown")
                 event.stop_event()
             except Exception:
                 logger.exception("今日运势 Markdown 失败，阶段：%s", stage)
-                yield event.plain_result(f"今日运势 MD 失败（{stage}），请查看日志；图床配置与 QQ 发送分别检查。")
+                yield event.plain_result(
+                    f"今日运势 MD 失败（{stage}），请查看日志；图床配置与 QQ 发送分别检查。"
+                )
+                event.stop_event()
             return
         yield event.image_result(str(image))
+        event.stop_event()
 
     async def terminate(self):
         if self._cleanup_task:
@@ -139,13 +169,13 @@ class DailyFortune(Star):
         finally:
             await self.service.close()
 
-    @filter.command("运势原图", alias=set())
+    @filter.command("运势原图", alias=set(), priority=1)
     async def fortune_original(self, event: AstrMessageEvent):
         event.should_call_llm(True)
         async for result in self._original(event, "运势原图", self.service):
             yield result
 
-    @filter.command("老婆原图", alias=set())
+    @filter.command("老婆原图", alias=set(), priority=1)
     async def wife_original(self, event: AstrMessageEvent):
         event.should_call_llm(True)
         async for result in self._original(event, "老婆原图", self.wife):
@@ -161,5 +191,4 @@ class DailyFortune(Star):
             return
         if image:
             yield event.image_result(str(image))
-        else:
-            event.stop_event()
+        event.stop_event()
