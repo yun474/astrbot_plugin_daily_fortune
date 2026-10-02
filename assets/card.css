@@ -31,3 +31,32 @@ body{margin:0;background:#efeae6;color:#382f35;font-family:"Microsoft YaHei","No
 .footer{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #987c772b;margin-top:10px;padding-top:9px;font-size:10px;line-height:1.5;letter-spacing:.5px;color:#876f73}
 .footer span:first-child{min-width:0;overflow-wrap:anywhere}
 .footer span:last-child{flex:none}
+
+/* 横图和方图完整展示，搭配纸质信息区。 */
+#card.paper{min-height:0;padding:0;background:#f8f5ef;color:#363330}
+.paper .hero{position:relative;inset:auto;z-index:auto;display:block;width:100%;height:auto;flex:none;object-fit:contain}
+.paper .art-space{display:none}
+.paper .body{padding:27px 36px 20px;border:0;border-radius:0;background:#f8f5ef;backdrop-filter:none;box-shadow:none}
+.paper .top{gap:20px}
+.paper .identity{gap:11px}
+.paper .avatar{width:36px;height:36px;border:1px solid #e2d9d0}
+.paper .top h1{font-size:23px;letter-spacing:3px;color:#423d38}
+.paper .date{font-size:16px;letter-spacing:1.5px;color:#665f58}
+.paper .date small{font-size:11px;letter-spacing:2px;color:#968b80}
+.paper .fortune{margin:22px 0 24px;padding:0;border:0;gap:22px}
+.paper .seal{display:flex;align-items:center;justify-content:center;min-width:100px;height:72px;padding:8px 14px;border:1px solid #b87770;outline:1px solid #d9b6ae;outline-offset:-5px;border-radius:3px;color:#a55852;font-size:39px;letter-spacing:4px;background:#f4e9e1}
+.paper .fortune-label{font-size:10px;color:#a39588;letter-spacing:2.5px;margin-bottom:8px}
+.paper .tip{font-size:17px;letter-spacing:.6px;color:#544a42;line-height:1.5}
+.paper .advice{gap:26px}
+.paper .panel{padding:0 22px 0 0;border-radius:0;background:none;grid-template-columns:32px minmax(0,1fr);column-gap:14px;row-gap:15px}
+.paper .panel.bad{padding:0 0 0 26px;background:none;border-left:1px solid #e3dbd1;grid-template-columns:32px minmax(0,1fr)}
+.paper .panel-head{align-self:start;padding-top:1px}
+.paper .symbol{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#e6ecdf;color:#647659;font:22px "KaiTi",serif}
+.paper .bad .symbol{background:#f0e1da;color:#aa6d60}
+.paper .event b{font-size:16px;font-weight:600;color:#49463e;letter-spacing:.6px}
+.paper .event p{font-size:13px;line-height:1.7;color:#8c8377;margin:4px 0 0}
+.paper .quote{margin:24px 0 0;padding-top:18px;border-top:1px solid #e3dbd1}
+.paper .quote-title{font-size:10px;letter-spacing:3px;color:#a09283}
+.paper .quote-text{font-size:20px;line-height:1.6;margin:9px 0 4px;color:#665449;letter-spacing:1px}
+.paper .source{font-size:11px;color:#a09283}
+.paper .footer{margin-top:19px;padding-top:12px;border-top:1px solid #e3dbd1;font-size:10px;color:#a3988a;letter-spacing:.3px}

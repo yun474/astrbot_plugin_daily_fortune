@@ -19,6 +19,7 @@ async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--browser", default="")
     parser.add_argument("--avatar", type=Path)
+    parser.add_argument("--background", type=Path, default=ROOT / "assets/default_background.jpg")
     parser.add_argument("--wife-image", type=Path, help="渲染今日老婆合成图，传入本地角色图片")
     parser.add_argument("--wife-name", default="芙宁娜")
     parser.add_argument("--wife-work", default="原神")
@@ -34,7 +35,7 @@ async def main():
         picture = normalize_image(args.wife_image.read_bytes())
         html = build_wife_html({"name": args.wife_name, "work": args.wife_work}, picture, avatar)
     else:
-        background = normalize_image((ROOT / "assets/default_background.jpg").read_bytes())
+        background = normalize_image(args.background.read_bytes())
         html = build_html(view, background, avatar)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     renderer = CardRenderer(args.browser)

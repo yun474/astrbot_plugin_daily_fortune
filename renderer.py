@@ -1,9 +1,11 @@
 import asyncio
 import base64
+import io
 from datetime import date
 from html import escape
 from pathlib import Path
 
+from PIL import Image
 from playwright.async_api import async_playwright
 
 ASSETS = Path(__file__).parent / "assets"
@@ -22,10 +24,12 @@ def build_html(view: dict, background: bytes, avatar: bytes) -> str:
 
     weekday = "星期" + "一二三四五六日"[date.fromisoformat(view["date"]).weekday()]
     css = (ASSETS / "card.css").read_text("utf-8")
+    with Image.open(io.BytesIO(background)) as image:
+        layout = ' class="paper"' if image.width >= image.height else ""
     # No remote resources execute or load in the screenshot page.
     return f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">
-<title>今日运势</title><style>{css}</style><article id="card">
+<title>今日运势</title><style>{css}</style><article id="card"{layout}>
 <img class="hero" src="{image_uri(background)}" alt="二次元插画"><div class="art-space"></div>
 <main class="body"><header class="top"><div class="identity">
 <img class="avatar" src="{image_uri(avatar)}" alt="用户头像"><h1>今日运势</h1></div>

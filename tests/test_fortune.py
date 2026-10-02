@@ -5,6 +5,7 @@ import pytest
 from daily_fortune_test.avatar import avatar_url
 from daily_fortune_test.fortune import draw
 from daily_fortune_test.renderer import build_html
+from daily_fortune_test.service import default_avatar
 
 
 def event(platform, author, uid="OPENID", appid="12345"):
@@ -48,7 +49,7 @@ def test_channel_avatar_and_no_qq_number_guess():
 def test_remote_text_cannot_inject_html():
     view = draw("test", "2026-09-29")
     view.update(quote='<img src=x onerror="alert(1)">', quote_source="<script>", quote_credit="一言", background_credit="自定义")
-    html = build_html(view, b"image", b"image")
+    html = build_html(view, default_avatar(), default_avatar())
     assert '<img src=x' not in html
     assert '&lt;script&gt;' in html
     assert "Content-Security-Policy" in html
