@@ -23,7 +23,7 @@ logger = logging.getLogger("astrbot")
     "astrbot_plugin_daily_fortune",
     "yun474",
     "今日运势与二次元老婆",
-    "0.2.2",
+    "0.2.3",
     "https://github.com/yun474/astrbot_plugin_daily_fortune",
 )
 class DailyFortune(Star):
@@ -37,6 +37,7 @@ class DailyFortune(Star):
         self.wife = WifeService(self.service)
         self.qq_wife_markdown = bool(config.get("qq_wife_markdown", False))
         self.qq_fortune_markdown = bool(config.get("qq_fortune_markdown", False))
+        self.qq_command_prefix = config.get("qq_command_prefix", "") or ""
         self.image_host = ImageHost(self.service)
         self.cleanup_interval = (
             number(config, "cache_cleanup_interval_hours", 6, 1, 168) * 3600
@@ -94,6 +95,7 @@ class DailyFortune(Star):
                     event,
                     dict(item, url=url, width=width, height=height),
                     retries=self.image_host.retries,
+                    command_prefix=self.qq_command_prefix,
                 ):
                     event.stop_event()
                     return
@@ -146,6 +148,7 @@ class DailyFortune(Star):
                     {"url": url, "width": width, "height": height},
                     retries=self.image_host.retries,
                     fortune=True,
+                    command_prefix=self.qq_command_prefix,
                 ):
                     raise RuntimeError("当前事件不支持 QQ Markdown")
                 event.stop_event()

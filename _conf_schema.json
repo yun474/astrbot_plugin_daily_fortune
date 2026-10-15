@@ -77,6 +77,12 @@
     "default": false,
     "hint": "QQ 官方群聊和私聊先上传运势卡到图床，再发送 Markdown 与按钮；开启前必须配置图床。"
   },
+  "qq_command_prefix": {
+    "description": "QQ 按钮自定义唤醒词",
+    "type": "string",
+    "default": "",
+    "hint": "今日运势和今日老婆 MD 按钮共用，原样拼接在指令前。留空保持原行为；填写 / 时，群聊按钮发送 @机器人 /今日运势 等指令，@机器人 由 QQ 自动添加。请填写 AstrBot 已配置的一个唤醒词；需要空格时自行保留。"
+  },
   "show_image_host": {
     "description": "展开图床配置",
     "type": "bool",

@@ -146,7 +146,7 @@ def md_text(value):
     return re.sub(r"([\\`*_{}\[\]()#+.!|>~-])", r"\\\1", escape(value))
 
 
-def payload_for(event, item, fortune=False):
+def payload_for(event, item, fortune=False, command_prefix=""):
     width, height = item["width"], item["height"]
     if type(width) is not int or type(height) is not int or width <= 0 or height <= 0:
         raise ValueError("QQ Markdown 图片需要有效的实际宽高")
@@ -163,8 +163,8 @@ def payload_for(event, item, fortune=False):
     buttons = [{
         "id": key,
         "render_data": {"label": label, "visited_label": label, "style": 1},
-        "action": {"type": 2, "permission": {"type": 2}, "data": label,
-                   "enter": True, "unsupport_tips": "请手动发送" + label},
+        "action": {"type": 2, "permission": {"type": 2}, "data": command_prefix + label,
+                   "enter": True, "unsupport_tips": "请手动发送" + command_prefix + label},
     } for key, label in (("wife", "今日老婆"), ("fortune", "今日运势"))]
     return {"msg_type": 2, "msg_id": event.message_obj.message_id, "msg_seq": 1,
             "markdown": {"content": content, "force_verify_image_resource": True},
@@ -213,7 +213,7 @@ def supports_markdown(event):
     return bool(field(raw, "group_openid") or field(field(raw, "author"), "user_openid"))
 
 
-async def send_markdown(event, item, retries=3, fortune=False):
+async def send_markdown(event, item, retries=3, fortune=False, command_prefix=""):
     from botpy.http import Route
 
     raw = event.message_obj.raw_message
@@ -224,7 +224,7 @@ async def send_markdown(event, item, retries=3, fortune=False):
         route = Route("POST", "/v2/users/{openid}/messages", openid=event.get_sender_id())
     else:
         return False  # Channel events use ordinary image delivery.
-    payload = payload_for(event, item, fortune)
+    payload = payload_for(event, item, fortune, command_prefix=command_prefix)
     for attempt in range(retries + 1):
         try:
             logger.info("QQ Markdown：开始请求，尝试 %d/%d，超时 %d 秒，markdown.force_verify_image_resource=%s",

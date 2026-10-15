@@ -44,7 +44,7 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
     for module in (api, event_api, star_api):
         monkeypatch.setitem(sys.modules, module.__name__, module)
     module = importlib.import_module("daily_fortune_test.main")
-    plugin = module.DailyFortune(None, {})
+    plugin = module.DailyFortune(None, {"qq_command_prefix": "/"})
     assert ("今日运势", {"jrys", "运势"}) in commands
     assert ("今日老婆", {"jrlp", "抽老婆"}) in commands
     assert ("运势原图", set()) in commands
@@ -118,6 +118,7 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
     sent = []
 
     async def send_md(event, item, **kwargs):
+        assert kwargs["command_prefix"] == "/"
         sent.append(item)
         return True
 

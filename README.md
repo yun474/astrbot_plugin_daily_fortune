@@ -103,6 +103,8 @@ Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤�
 
 两项功能默认发送合成图。QQ 官方群聊和私聊可分别开启 `qq_fortune_markdown`（今日运势）和 `qq_wife_markdown`（今日老婆）：消息开头 @发送者，并提供两个快捷按钮。OneBot 和频道场景仍发送合成图。
 
+如果快捷按钮需要适配 AstrBot 的自定义唤醒词，可在插件配置的「QQ 按钮自定义唤醒词」（`qq_command_prefix`）中填写一个已在 AstrBot 中配置的唤醒词。例如填写 `/` 后，群聊点击按钮会发送 `@机器人 /今日运势` 或 `@机器人 /今日老婆`；`@机器人` 由 QQ 自动添加，无需填写。私聊按钮同样使用此前缀。留空保持原行为；内容原样拼接，需要空格时请自行保留。该设置只影响按钮发送的指令及手动发送提示，不修改 AstrBot 自身的唤醒词配置。
+
 两项功能均不查询昵称。运势卡和今日老婆合成图只获取用户头像；老婆 MD 展示角色插画的压缩副本，运势 MD 展示完整运势卡。获取未经 MD 压缩的角色图片请用 `/老婆原图`。
 
 老婆 MD 结尾为「要好好对她哦~」，运势 MD 结尾为「请勿迷信，仅供参考」，均使用引用格式。完整消息示例：[今日老婆](docs/wife-qq-markdown.md) · [今日运势](docs/fortune-qq-markdown.md)。
@@ -136,6 +138,7 @@ Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤�
 | `wife_image_base` | 今日老婆图片的公网基础地址 | `https://raw.githubusercontent.com/monbed/wife/main/` |
 | `qq_wife_markdown` | 今日老婆 MD 模式，需要配置图床 | 关闭 |
 | `qq_fortune_markdown` | 今日运势 MD 模式，需要配置图床 | 关闭 |
+| `qq_command_prefix` | 两个 MD 模式的按钮自定义唤醒词，原样拼接在指令前，如 `/` | 留空 |
 | `show_image_host` | 展开／收起图床配置，不影响运行 | 收起 |
 | `cache_retention_days` | 缓存保留天数，包含今天，范围 1～365 | `7` |
 | `cache_cleanup_interval_hours` | 自动清理间隔，范围 1～168 小时 | `6` |

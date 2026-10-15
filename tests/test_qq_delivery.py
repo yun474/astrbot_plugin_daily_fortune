@@ -38,7 +38,8 @@ async def qq_server(monkeypatch, handler, group=True):
 @pytest.mark.parametrize('group', [True, False])
 @pytest.mark.parametrize('fortune', [True, False])
 @pytest.mark.parametrize('code', [40034004, 40034141])
-async def test_wire_payload_verifies_images_and_retries_platform_error(monkeypatch, caplog, group, fortune, code):
+@pytest.mark.parametrize('prefix', ['', '/', '云云', '云云 '])
+async def test_wire_payload_verifies_images_and_retries_platform_error(monkeypatch, caplog, group, fortune, code, prefix):
     calls = []
 
     async def handler(request):
@@ -59,7 +60,7 @@ async def test_wire_payload_verifies_images_and_retries_platform_error(monkeypat
     monkeypatch.setattr('daily_fortune_test.wife.asyncio.sleep', no_sleep)
     async with qq_server(monkeypatch, handler, group) as event:
         with caplog.at_level('INFO', logger='astrbot'):
-            assert await send_markdown(event, ITEM, fortune=fortune)
+            assert await send_markdown(event, ITEM, fortune=fortune, command_prefix=prefix)
     assert len(calls) == 2
     assert calls[0] == calls[1]
     path, body, auth = calls[0]
@@ -68,6 +69,13 @@ async def test_wire_payload_verifies_images_and_retries_platform_error(monkeypat
     assert body['markdown']['force_verify_image_resource'] is True
     assert 'force_verify_image_resource' not in body
     assert body['msg_id'] == 'MSG' and body['msg_seq'] == 1
+    buttons = body['keyboard']['content']['rows'][0]['buttons']
+    for button, label in zip(buttons, ['今日老婆', '今日运势'], strict=True):
+        assert button['render_data']['label'] == label
+        assert button['render_data']['visited_label'] == label
+        assert button['action']['data'] == prefix + label
+        assert button['action']['unsupport_tips'] == '请手动发送' + prefix + label
+        assert button['action']['enter'] is True
     assert str(code) in caplog.text and 'image-transfer-trace' in caplog.text
     assert '重试' in caplog.text
 
