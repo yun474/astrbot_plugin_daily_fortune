@@ -1,21 +1,106 @@
-# 今日运势与今日老婆
+<div align="center">
 
-一个 AstrBot 每日抽签插件，给群友看看运势，再抽一位二次元老婆。使用免费图源，无需申请 API Key。
+# 🔮 今日运势与今日老婆
 
-- **今日运势**：用户头像搭配二次元插画、吉凶、宜忌和一言，根据插画比例自动排版，不显示昵称。
-- **今日老婆**：抽取角色并展示角色名、所属作品和图片。
-- **可选 MD 模式**：两项功能均可在 QQ 官方群聊、私聊中发送 Markdown，附带「今日老婆」「今日运势」按钮；需要配置图床。
-- **每天固定**：按北京时间每日更新，同一用户在同一平台实例内当天结果不变，重启后仍可保留。
+**每天抽一张运势签，再领一位二次元老婆。**
 
-没有签到、经验、等级或货币系统。
+✨ [AstrBot](https://github.com/AstrBotDevs/AstrBot) · QQ 官方机器人 / OneBot · 免费图源，无需 API Key ✨
 
-## 效果预览
+[![License: MIT](https://img.shields.io/badge/License-MIT-a3be8c.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-89b4fa.svg)](https://www.python.org/)
+[![AstrBot 3.5.3+](https://img.shields.io/badge/AstrBot-3.5.3%2B-f2cd94.svg)](https://github.com/AstrBotDevs/AstrBot)
+[![作者 yun474](https://img.shields.io/badge/作者-yun474-f5b7c7.svg)](https://github.com/yun474)
 
-![今日运势预览](docs/preview.png)
+<img src="https://count.getloli.com/@daily_fortune?theme=booru-lewd&padding=7&offset=4&align=top&scale=1&pixelated=1&darkmode=auto" alt="访问计数" />
 
-上图由当前插件模板实际渲染：横图和方图完整展示，下方搭配暖白底、朱红签印和细线分栏，卡片高度随内容变化；竖图沿用整张背景与半透明信息面板。运势卡会使用发送者的头像，图中为演示头像。
+[功能亮点](#features) · [效果预览](#preview) · [安装使用](#usage) · [MD 模式](#markdown) · [配置项](#config) · [图床配置](#image-host) · [常见问题](#faq)
 
-开启今日老婆 MD 模式后，QQ 官方群聊、私聊中的消息内容如下，图片与按钮的外观由 QQ 客户端呈现：
+</div>
+
+---
+
+<a id="features"></a>
+
+## ✨ 能玩什么
+
+- **今日运势**：用户头像 + 二次元插画 + 吉凶、宜忌与一言，按插画比例自动排版，不显示昵称。
+- **今日老婆**：抽一位角色，展示角色名、所属作品和插画。
+- **每天固定**：按北京时间每日更新，同一平台实例内当天结果不变，重启后仍保留。
+- **QQ MD 模式（可选）**：QQ 官方群聊、私聊可发送 Markdown 图文，附带「今日老婆」「今日运势」快捷按钮，需要配置图床。
+
+没有签到、经验、等级或货币系统，抽完就走，轻轻松松~
+
+<a id="preview"></a>
+
+## 🎴 效果预览
+
+<table>
+  <tr>
+    <th>🔮 今日运势</th>
+    <th>💝 今日老婆</th>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/preview.png" width="260" alt="今日运势预览" /></td>
+    <td valign="top"><img src="docs/wife-preview.png" width="260" alt="今日老婆预览" /></td>
+  </tr>
+</table>
+
+预览图由插件模板实际渲染，图中为演示头像。横图、方图完整展示，下方搭配暖白底与朱红签印；竖图使用整张背景加半透明信息面板。
+
+<a id="usage"></a>
+
+## 🚀 安装与使用
+
+### 1. 安装插件
+
+在 AstrBot 插件管理中选择从链接安装，填入仓库地址 `https://github.com/yun474/astrbot_plugin_daily_fortune`。需要 **AstrBot 3.5.3 或更新版本**，支持 QQ 官方 WebSocket、QQ 官方 Webhook 和 OneBot（aiocqhttp）。
+
+### 2. 准备图片渲染环境
+
+卡片需要 Chromium 渲染。在 **AstrBot 使用的 Python 环境**中，进入插件目录执行：
+
+```bash
+python -m pip install -r requirements.txt
+python -m playwright install chromium
+```
+
+Linux / Docker 还需要浏览器运行库和中文字体（Debian / Ubuntu，需 root）：
+
+```bash
+python -m playwright install-deps chromium
+apt-get update && apt-get install -y fonts-noto-cjk
+```
+
+Docker 部署请在 AstrBot 容器内安装，并写进自定义镜像，避免重建容器后丢失。已经装好 Chrome / Chromium 的话，也可以在配置里填 `browser_executable_path` 直接用现有浏览器。
+
+### 3. 开始抽签
+
+启用或重载插件后，在群里 @机器人发送：
+
+| 指令 | 别名 | 用途 |
+| --- | --- | --- |
+| `/今日运势` | `/jrys`、`/运势` | 抽取今日运势 |
+| `/今日老婆` | `/jrlp`、`/抽老婆` | 抽取今日老婆 |
+| `/运势原图 [@用户]` | — | 获取运势背景原图 |
+| `/老婆原图 [@用户]` | — | 获取老婆角色原图 |
+
+上表以 `/` 为前缀，实际以 AstrBot 配置为准；自定义唤醒词同样可用，例如「云云今日老婆」。指令命中后不会再触发 AI 回复。
+
+**获取原图**：先抽取运势或老婆，再发送对应原图指令，机器人只发图片，不叠加头像和信息栏。在指令后 @某位群友可以获取对方当天的原图（多个 @ 取第一个），不会替对方重新抽取；当天没有记录时不回复。
+
+<a id="markdown"></a>
+
+## 📱 QQ MD 模式
+
+两项功能默认发送合成图。在 QQ 官方群聊和私聊中，可分别开启 `qq_fortune_markdown`（今日运势）和 `qq_wife_markdown`（今日老婆），消息开头 @发送者，结尾附两个快捷按钮：
+
+<table>
+  <tr>
+    <th>今日老婆 MD</th>
+    <th>今日运势 MD</th>
+  </tr>
+  <tr>
+    <td valign="top">
 
 > @用户
 >
@@ -29,161 +114,88 @@
 >
 > 【今日老婆】　【今日运势】
 
-今日运势 MD 使用同样的按钮，内容如下：
+</td>
+    <td valign="top">
 
 > @用户
 >
 > 今日运势
 >
-> （上方紧凑布局的完整运势卡）
+> （完整运势卡）
 >
 > 请勿迷信，仅供参考
 >
 > 【今日老婆】　【今日运势】
 
-以上是内容示意，并非 QQ 客户端截图。实际图片语法包含上传图片的真实宽高，例如 `![图片 #800px #1200px](https://img.example.com/fortune.jpg)`。完整请求体示例：[老婆 MD](docs/wife-qq-payload.json) · [运势 MD](docs/fortune-qq-payload.json)。
+</td>
+  </tr>
+</table>
 
-非 Markdown 场景发送合成图：完整角色插画下方配有半透明信息栏，展示用户头像、角色名和作品名。
+以上为内容示意，图片与按钮的实际外观由 QQ 客户端呈现。完整请求体示例：[老婆 MD](docs/wife-qq-payload.json) · [运势 MD](docs/fortune-qq-payload.json)。
 
-![今日老婆合成图预览](docs/wife-preview.png)
+- **按钮唤醒词**：如果 AstrBot 设置了 `/` 等唤醒词，在 `qq_command_prefix` 中填写相同内容，按钮会发送 `@机器人 /今日运势`。内容原样拼接，留空保持默认。
+- **图片压缩**：上传前统一转为最长边 1600 像素、不超过 1 MiB 的 JPEG；当天相同图片复用已上传地址。需要未压缩的图片请用原图指令。
+- **失败兜底**：MD 在发送前失败，或 QQ 明确返回错误时，自动改发普通合成图；QQ 请求超时、结果不明时只回复提示，避免重复消息。
+- OneBot 和 QQ 频道场景始终发送合成图。
 
-## 安装
+<a id="config"></a>
 
-需要 **AstrBot 3.5.3 或以上版本**。支持 QQ 官方 WebSocket、QQ 官方 Webhook 和 OneBot（aiocqhttp）。
+## ⚙️ 配置项说明
 
-### 1. 安装插件
+在 AstrBot 插件管理中打开配置页修改并保存，重载插件后生效。调整缓存和并发不会重抽当天结果。
 
-在 AstrBot 插件管理中选择从链接安装，填入仓库地址：
-
-```text
-https://github.com/yun474/astrbot_plugin_daily_fortune
-```
-
-也可以将仓库放入 `AstrBot/data/plugins/astrbot_plugin_daily_fortune/`。
-
-### 2. 准备图片渲染环境
-
-今日运势需要 Chromium 渲染图片。在 **AstrBot 使用的 Python 环境**中，进入插件目录后执行：
-
-```bash
-python -m pip install -r requirements.txt
-python -m playwright install chromium
-```
-
-Linux / Docker 环境还需要浏览器运行库和中文字体。Debian / Ubuntu 可执行以下命令，其中系统依赖安装需要 root 权限：
-
-```bash
-python -m playwright install-deps chromium
-apt-get update
-apt-get install -y fonts-noto-cjk
-```
-
-Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤写入自定义镜像，避免重建容器后丢失。浏览器应安装在 AstrBot 运行用户可访问的位置。
-
-如果已经安装 Chrome / Chromium，可以在插件配置中填写 `browser_executable_path`，使用现有浏览器。
-
-### 3. 启用插件
-
-在插件管理中启用或重载插件，发送下方命令即可使用。
-
-## 使用方法
-
-| 功能 | 命令 | 别名 |
+| 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| 抽取今日运势 | `/今日运势` | `/jrys`、`/运势` |
-| 抽取今日老婆 | `/今日老婆` | `/jrlp`、`/抽老婆` |
-| 获取自己的运势背景原图 | `/运势原图` | — |
-| 获取自己的老婆原图 | `/老婆原图` | — |
+| `background_url` | 妖狐二次元图库 | 运势卡背景，填图片直链或本地路径 |
+| `background_credit` | 妖狐图库 | 卡片上的背景来源标注 |
+| `hitokoto_api` | 一言动画、漫画分类 | 一言接口；留空使用内置句子 |
+| `browser_executable_path` | 留空 | Chrome / Chromium 路径；留空使用 Playwright Chromium |
+| `wife_list_url` | `https://animewife.dpdns.org/list.txt` | 今日老婆角色列表 |
+| `wife_image_base` | `https://raw.githubusercontent.com/monbed/wife/main/` | 角色图片的公网基础地址 |
+| `qq_wife_markdown` / `qq_fortune_markdown` | 关闭 | 今日老婆 / 今日运势 MD 模式，需要配置图床 |
+| `qq_command_prefix` | 留空 | MD 按钮的自定义唤醒词，如 `/` |
+| `show_image_host` | 收起 | 展开／收起图床配置，只影响显示 |
+| `cache_retention_days` | `7` | 缓存保留天数（含今天），1～365 |
+| `cache_cleanup_interval_hours` | `6` | 自动清理间隔，1～168 小时 |
+| `wife_catalog_cache_hours` | `24` | 角色列表缓存时间，1～168 小时 |
+| `request_timeout_seconds` | `15` | 图片、角色列表和一言的下载超时，5～120 秒 |
+| `render_concurrency` | `2` | 运势卡与老婆合成图共用的生成并发数，1～4 |
 
-上表以 `/` 为命令前缀，实际以 AstrBot 配置为准。QQ 官方群聊中先 @机器人，再发送命令。
+<a id="image-host"></a>
 
-四个命令均通过 AstrBot 原生命令注册，自定义唤醒词由 AstrBot 处理。例如唤醒词设为「云云」时可发送「云云今日老婆」，也可以直接「@机器人 今日老婆」。指令优先级为 `1`，先于默认优先级 `0` 的聊天监听器执行；接管后禁止默认 LLM 请求，并在回复发送完毕后停止事件传播，覆盖合成图、MD、错误提示和原图无记录时的静默返回。
+## 🖼️ 图床配置
 
-`should_call_llm(True)` 只禁止 AstrBot 的默认 LLM 请求，其他插件主动发起的请求需要通过停止事件传播来避免。已经先于本插件执行的更高优先级监听器或独立任务不受此次阻断影响；若仍出现额外 AI 回复，请检查 AstrBot 调试日志中的 `plugin ->` 执行顺序，确认指令是否命中本插件、LLM 是在哪个处理器中发起的。
+只有开启 MD 模式时才需要图床。打开「展开图床配置」，在「图床类型」中选择服务商，页面只显示对应参数；各类型独立保存，切换回来无需重填。配置完成后可以收起，不影响上传。
 
-两项功能默认发送合成图。QQ 官方群聊和私聊可分别开启 `qq_fortune_markdown`（今日运势）和 `qq_wife_markdown`（今日老婆）：消息开头 @发送者，并提供两个快捷按钮。OneBot 和频道场景仍发送合成图。
+图片公网地址必须能被 QQ 服务器直接访问。插件不会修改桶权限、ACL 或域名，请提前配置好公开读取；仅支持长期访问密钥，不支持 STS 临时凭据。
 
-如果快捷按钮需要适配 AstrBot 的自定义唤醒词，可在插件配置的「QQ 按钮自定义唤醒词」（`qq_command_prefix`）中填写一个已在 AstrBot 中配置的唤醒词。例如填写 `/` 后，群聊点击按钮会发送 `@机器人 /今日运势` 或 `@机器人 /今日老婆`；`@机器人` 由 QQ 自动添加，无需填写。私聊按钮同样使用此前缀。留空保持原行为；内容原样拼接，需要空格时请自行保留。该设置只影响按钮发送的指令及手动发送提示，不修改 AstrBot 自身的唤醒词配置。
+**兰空 Lsky Pro V2 / 自定义 HTTP**：
 
-两项功能均不查询昵称。运势卡和今日老婆合成图只获取用户头像；老婆 MD 展示角色插画的压缩副本，运势 MD 展示完整运势卡。获取未经 MD 压缩的角色图片请用 `/老婆原图`。
-
-老婆 MD 结尾为「要好好对她哦~」，运势 MD 结尾为「请勿迷信，仅供参考」，均使用引用格式。完整消息示例：[今日老婆](docs/wife-qq-markdown.md) · [今日运势](docs/fortune-qq-markdown.md)。
-
-### 获取原图
-
-先抽取今日运势或今日老婆，再发送对应的原图指令。机器人只发送图片，不附带提示文字，也不叠加头像和信息栏。
-
-在指令后通过 QQ 的 @功能选择用户，可以获取对方当天的原图，例如：
-
-```text
-@机器人 /运势原图 @用户
-@机器人 /老婆原图 @用户
-```
-
-不加 @用户时获取自己的原图；添加多个用户时取第一个。查询范围是当前平台实例内的当天结果，不会为对方重新抽取。没有当天记录或读取失败时不发送消息，可在 AstrBot 日志中检查读取错误。
-
-运势背景按原始分辨率保存为 PNG，随图片缓存清理；安装此功能前生成的旧运势卡没有保存背景原图，需等下一次生成新卡。老婆原图使用已抽中角色的图片地址。
-
-## 配置说明
-
-在 AstrBot 插件管理中打开本插件的配置页面，修改并保存。
-
-| 配置项 | 用途 | 默认设置 |
+| 配置项 | 默认值 | 填写内容 |
 | --- | --- | --- |
-| `background_url` | 运势卡背景，可填图片直链或本地路径 | 妖狐二次元图库 |
-| `background_credit` | 运势卡上的背景来源标注 | 妖狐图库 |
-| `hitokoto_api` | 一言接口，留空使用内置句子 | 一言动画、漫画分类 |
-| `browser_executable_path` | Chrome / Chromium 可执行文件路径 | 留空使用 Playwright Chromium |
-| `wife_list_url` | 今日老婆角色列表地址 | `https://animewife.dpdns.org/list.txt` |
-| `wife_image_base` | 今日老婆图片的公网基础地址 | `https://raw.githubusercontent.com/monbed/wife/main/` |
-| `qq_wife_markdown` | 今日老婆 MD 模式，需要配置图床 | 关闭 |
-| `qq_fortune_markdown` | 今日运势 MD 模式，需要配置图床 | 关闭 |
-| `qq_command_prefix` | 两个 MD 模式的按钮自定义唤醒词，原样拼接在指令前，如 `/` | 留空 |
-| `show_image_host` | 展开／收起图床配置，不影响运行 | 收起 |
-| `cache_retention_days` | 缓存保留天数，包含今天，范围 1～365 | `7` |
-| `cache_cleanup_interval_hours` | 自动清理间隔，范围 1～168 小时 | `6` |
-| `wife_catalog_cache_hours` | 角色列表缓存时间，范围 1～168 小时 | `24` |
-| `request_timeout_seconds` | 图片、角色列表及一言下载超时，范围 5～120 秒 | `15` |
-| `render_concurrency` | 运势卡与老婆合成图共用的生成并发数，范围 1～4 | `2` |
+| `upload_url` | 留空 | 完整 POST 上传地址，如 `https://你的图床/api/v1/upload` |
+| `authorization` | 留空 | Authorization 请求头，如 `Bearer 你的Token`；匿名接口可留空 |
+| `file_field` | `file` | multipart 文件字段名（兰空自动设置） |
+| `url_path` | `data.links.url` | 响应 JSON 中图片直链的路径，支持 `data.0.url` 等数组路径（兰空自动设置） |
 
-保存配置后重载插件生效。调整缓存和并发设置不会重新抽取当天运势背景。
+自定义 HTTP 兼容 `multipart/form-data` 上传并返回 JSON 的图床，不支持网页表单登录。默认格式参考 [兰空 V2 上传配置](https://github.com/lsky-org/lsky-pro/discussions/357)。
 
-### 开启 MD 模式与配置图床
+**Cloudflare R2**（字段位于 `image_host.r2`）：
 
-1. 更新依赖（`pip install -r requirements.txt`），打开「展开图床配置」，从「图床类型」下拉列表选择服务商。
-2. 切换类型后，配置页仅显示该图床的配置分组。HTTP 图床填写上传接口与鉴权信息；对象存储填写端点、存储桶、密钥、区域和图片公网基础地址。各类型参数独立保存，切换回来会保留原有填写内容；重试次数与超时为共用设置。
-3. 分别开启「今日运势：MD 模式」或「今日老婆：MD 模式」，保存并重载插件。
-4. 配置完成后可关闭「展开图床配置」收起详细设置，上传功能仍正常工作。
-
-| 图床配置项 | 填写方式 / 默认值 |
+| 配置项 | 填写内容 |
 | --- | --- |
-| `upload_url` | 完整 POST 上传接口，例如 `https://你的图床/api/v1/upload` |
-| `authorization` | Authorization 请求头，例如 `Bearer 你的Token`；匿名接口可留空 |
-| `file_field` | multipart 文件字段名，默认 `file` |
-| `url_path` | 响应 JSON 中图片直链路径，默认 `data.links.url`；也支持 `data.0.url` 等数组路径 |
-| `retry_count` | 失败后最多重试次数，默认 `3`，范围 0～10；不含首次请求 |
-| `timeout_seconds` | 每次图床上传超时，默认 `30` 秒，范围 5～120 |
-
-以上 HTTP 字段用于「自定义 HTTP」和「兰空 Lsky Pro V2」。选择兰空时只显示上传地址与鉴权字段，自动使用 `file` 与 `data.links.url`；自定义 HTTP 可自行修改，兼容支持 `multipart/form-data` 上传并返回 JSON 的图床，不支持网页表单登录。升级后重载插件，原来的共享字段会自动迁移到当前选中的图床分组并保存；尚未选择类型的旧配置归入自定义 HTTP。默认格式参考 [兰空 V2 上传配置](https://github.com/lsky-org/lsky-pro/discussions/357)。
-
-#### Cloudflare R2 填写示例
-
-在下拉列表选择 `Cloudflare R2` 后，展开对应分组填写以下字段。JSON 配置中它们位于 `image_host.r2`；类型选择和重试、超时仍位于 `image_host`。
-
-| 配置项 | 示例 / 说明 |
-| --- | --- |
-| `provider` | 下拉选择 `Cloudflare R2` |
-| `endpoint` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`；复制 R2 控制台的 S3 API 端点，特定管辖区域使用其完整端点 |
-| `bucket` | 已创建的桶名称，例如 `bot-images` |
-| `access_key_id` / `secret_access_key` | R2 S3 API 凭据的 Access Key ID 与 Secret Access Key，需具备该桶的对象写入权限；不是 Cloudflare API Token |
+| `endpoint` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`，复制 R2 控制台的 S3 API 端点 |
+| `bucket` | 桶名称，如 `bot-images` |
+| `access_key_id` / `secret_access_key` | R2 S3 API 凭据，需有该桶的写入权限；不是 Cloudflare API Token |
 | `region` | 留空，自动使用 `auto` |
-| `public_base_url` | 桶绑定的公开自定义域名，例如 `https://img.example.com`；也可填已开启的 `https://pub-xxx.r2.dev` 测试地址 |
-| `key_prefix` | 默认 `daily-fortune`；可留空 |
+| `public_base_url` | 桶绑定的公开域名，如 `https://img.example.com`；测试可用 `https://pub-xxx.r2.dev` |
+| `key_prefix` | 默认 `daily-fortune`，可留空 |
 | `addressing_style` | 保持 `auto` |
 
-最终图片地址形如 `https://img.example.com/daily-fortune/2026-09-29/<图片哈希>.jpg`。公网基础地址应指向桶根目录，不要再次附加路径前缀。上传端点用于签名写入，不能代替图片公网地址。参考 [R2 S3 接入文档](https://developers.cloudflare.com/r2/examples/aws/boto3/) 与 [公开访问配置](https://developers.cloudflare.com/r2/buckets/public-buckets/)；`r2.dev` 用于开发测试，生产使用自定义域名。
+`endpoint` 用于上传签名，`public_base_url` 用于图片访问，两者不要填反。最终图片地址形如 `https://img.example.com/daily-fortune/2026-09-29/<图片哈希>.jpg`。参考 [R2 S3 接入文档](https://developers.cloudflare.com/r2/examples/aws/boto3/) 与 [公开访问配置](https://developers.cloudflare.com/r2/buckets/public-buckets/)。
 
-配置片段示例（合并到现有配置，替换占位值）：
+<details>
+<summary>R2 配置片段示例</summary>
 
 ```json
 {
@@ -208,92 +220,106 @@ Docker 部署请在运行 AstrBot 的容器内安装，并将相关安装步骤�
 }
 ```
 
-#### 其他对象存储
+</details>
 
-下列类型均使用相同的对象存储配置字段，密钥填对应厂家的访问密钥。端点必须包含 `https://`，不含桶名；MinIO 的本地服务也可使用 `http://主机:端口`。`public_base_url` 必须填写对应桶可公开读取的基础地址或 CDN 地址（路径式访问时包含桶名）。
+<details>
+<summary>其他对象存储（AWS S3、阿里云 OSS、腾讯云 COS 等）</summary>
 
-| 下拉类型 | 上传端点示例 | 区域与自动寻址 |
+字段与 R2 相同，密钥填对应厂家的访问密钥。端点需包含 `https://` 且不含桶名（本地 MinIO 可用 `http://主机:端口`）；`public_base_url` 填桶的公开访问地址或 CDN 地址，路径式访问时包含桶名。
+
+| 图床类型 | 上传端点示例 | 区域与寻址 |
 | --- | --- | --- |
-| AWS S3 | `https://s3.ap-southeast-1.amazonaws.com` | 填实际区域，如 `ap-southeast-1`；virtual |
-| 阿里云 OSS | `https://s3.oss-cn-hangzhou.aliyuncs.com` | 区域可留空；使用 S3 V2 签名，强制 virtual |
+| AWS S3 | `https://s3.ap-southeast-1.amazonaws.com` | 填实际区域；virtual |
+| 阿里云 OSS | `https://s3.oss-cn-hangzhou.aliyuncs.com` | 区域可留空；S3 V2 签名，强制 virtual |
 | 腾讯云 COS | `https://cos.ap-guangzhou.myqcloud.com` | `ap-guangzhou`；virtual；桶名含 `-APPID` |
-| 七牛云 Kodo | `https://s3.cn-east-2.qiniucs.com` | `cn-east-2`；virtual；使用 S3 接口端点 |
-| MinIO | `https://s3.example.com` | 默认 `us-east-1`，按服务配置修改；path；填写 S3 API 端口而非管理面板 |
-| Backblaze B2 | `https://s3.us-west-004.backblazeb2.com` | `us-west-004`，以控制台为准；path；密钥为 keyID / applicationKey |
-| DigitalOcean Spaces | `https://nyc3.digitaloceanspaces.com` | `nyc3`，以桶区域为准；virtual |
-| 其他 S3 兼容存储 | 厂家提供的 S3 API 端点 | 默认 `us-east-1`；path；可修改区域与寻址方式 |
+| 七牛云 Kodo | `https://s3.cn-east-2.qiniucs.com` | `cn-east-2`；virtual |
+| MinIO | `https://s3.example.com` | 默认 `us-east-1`；path；填 S3 API 端口而非管理面板 |
+| Backblaze B2 | `https://s3.us-west-004.backblazeb2.com` | 以控制台为准；path；密钥为 keyID / applicationKey |
+| DigitalOcean Spaces | `https://nyc3.digitaloceanspaces.com` | 以桶区域为准；virtual |
+| 其他 S3 兼容存储 | 厂家提供的 S3 API 端点 | 默认 `us-east-1`；path；可手动修改 |
 
-适配依据：[OSS SDK 接入与签名](https://help.aliyun.com/zh/oss/developer-reference/use-aws-sdks-to-access-oss)、[COS S3 配置](https://intl.cloud.tencent.com/document/product/436/34688?lang=en)、[七牛服务域名](https://developer.qiniu.com/kodo/4088/s3-access-domainname)、[B2 S3 接口](https://www.backblaze.com/docs/en/cloud-storage-call-the-s3-compatible-api)、[Spaces 接口](https://docs.digitalocean.com/reference/api/spaces/)。已用本地 HTTP 服务验证上传、签名参数、重试与缓存；未使用各厂家的真实账户逐一联调。
+适配依据：[OSS](https://help.aliyun.com/zh/oss/developer-reference/use-aws-sdks-to-access-oss) · [COS](https://intl.cloud.tencent.com/document/product/436/34688?lang=en) · [七牛](https://developer.qiniu.com/kodo/4088/s3-access-domainname) · [B2](https://www.backblaze.com/docs/en/cloud-storage-call-the-s3-compatible-api) · [Spaces](https://docs.digitalocean.com/reference/api/spaces/)。已用本地 HTTP 服务验证上传与签名，未使用各厂家真实账户逐一联调。
 
-图片直链必须允许 QQ 服务器公开访问。对象存储上传不会自动修改桶权限、ACL 或域名配置，也不会生成临时下载链接；请预先配置公开读取或可公开访问的 CDN。仅支持长期访问密钥，不支持 STS 会话凭据。新增 `boto3` 依赖仅用于本地签名，实际上传由异步 HTTP 客户端执行。
+</details>
 
-运势 MD 上传完整运势卡，老婆 MD 下载选中的角色图片再上传；老婆 MD 的压缩图按日期缓存，当天重复发送不再下载原图。两个 MD 模式均在上传前转为 JPEG，最长边不超过 1600 像素，体积不超过 1 MiB；原图指令不受影响。相同图片在当天复用已上传地址；修改图床类型、桶、密钥、公网地址或路径前缀后不复用旧配置缓存。本地上传记录随图片缓存清理。对象存储按「前缀/日期/图片哈希.jpg」保存，图床上的远程图片需通过图床自身的保留策略清理。
+**重试与超时**：`retry_count` 默认 `3`（0～10，不含首次请求），`timeout_seconds` 默认 `30` 秒（5～120）。图床网络错误、429、5xx 以及 QQ 图片转存错误码 `304010`／`40034004`／`40034141` 会自动重试；鉴权错误和响应字段错误不重试。
 
-图床网络错误、429 和 5xx 响应，以及 QQ 图片转存错误码 `304010`／`40034004`／`40034141`，默认最多重试 3 次（共 4 次尝试）。鉴权错误、响应字段错误不重试；QQ 发送超时因结果不明也不自动重发。每次 QQ MD 请求都在 `markdown` 对象内设置 `force_verify_image_resource=true`；该字段不放在请求体顶层。字段层级依据 [QQ 官方群聊发送接口](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_groups_group_openid_messages.post.html) 与 [单聊发送接口](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_users_user_openid_messages.post.html) 的 `MessageMarkdown` 定义。
+对象存储按「前缀/日期/图片哈希.jpg」保存，远程图片需要通过图床自身的生命周期规则清理。
 
-旧版已开启的老婆 MD 配置会保留，请补填图床或关闭该开关。未配置图床时不会使用源站链接发送 MD，而是改发普通合成图。图床设置的收起功能依赖 AstrBot 配置页对条件显示的支持，旧版面板可能始终展示这些字段。
+## 🎨 自定义图源
 
-### 更换运势背景
+**更换运势背景**：`background_url` 需要直接返回图片，不要填返回 JSON 的接口。本地相对路径以插件目录为基准，例如 `assets/default_background.jpg`。换图时记得同步修改 `background_credit`。
 
-`background_url` 应直接返回图片，不要填写返回 JSON 的接口地址。本地相对路径以插件目录为基准，例如 `assets/default_background.jpg`；使用本地图片后，不再请求在线背景图源。
+**更换角色图库**：`wife_list_url` 指向纯文本列表，每行一张图片的相对路径，如 `img2/原神!芙宁娜.jpg`。插件从文件名读取作品名和角色名，并拼接到 `wife_image_base` 后获取图片。自建镜像时目录结构需与列表一致。列表默认缓存 24 小时，更换图库不会改变用户当天已抽到的角色。
 
-更换图片时，请同时修改 `background_credit` 中的来源标注。
+## 🧹 缓存清理
 
-### 更换角色图库
+插件启动时清理一次，之后默认每 6 小时自动清理，默认保留含今天在内的 7 天数据。运行数据位于 `data/plugin_data/astrbot_plugin_daily_fortune/`，无需手动清空：
 
-`wife_list_url` 指向纯文本列表，每行一张图片的相对路径，例如：
+- `cards/`：运势合成图、背景原图和老婆合成图，按日期删除。
+- `wife/`：过期的用户抽取记录。
+- 异常退出留下的临时文件，超过 24 小时后删除。
 
-```text
-img2/原神!芙宁娜.jpg
-```
+清理不会动配置中的本地图片和当天结果。
 
-插件从文件名中读取作品名和角色名，并将相对路径拼接到 `wife_image_base` 后获取图片。使用自建图床或镜像时，目录结构需要与列表保持一致，图片地址也必须能被 QQ 服务器公开访问。
+<a id="faq"></a>
 
-列表默认缓存 24 小时，过期后在下次抽取时刷新。更换图库不会改变用户当天已经抽到的角色。
+## ❓ 常见问题
 
-### 缓存清理
+<details>
+<summary>今日运势只返回文字，没有图片</summary>
 
-插件启动时立即清理一次，之后默认每 6 小时自动清理，即使没有新命令也会执行。默认保留包含今天在内的 7 个北京时间日期，设 `cache_retention_days=1` 可只保留当天。
+通常是浏览器未安装、运行库缺失，或 `browser_executable_path` 填错。请确认安装命令用的是 AstrBot 的 Python 环境，并在日志中查找「今日运势图片生成失败」。
 
-- `cards/`：按日期保存运势合成图、背景原图及老婆合成图，过期目录统一删除。
-- `wife/`：删除过期用户抽取记录，角色列表只保留一份并在需要时刷新。
-- 异常退出留下的临时图片和临时记录，超过 24 小时后删除。
+</details>
 
-清理仅针对插件数据目录，不删除配置中的本地图片、仓库预览图或当天结果。图片下载和浏览器页面使用内存，不另存头像缓存。运行数据位于 `data/plugin_data/astrbot_plugin_daily_fortune/`，无需手动定期清空。
+<details>
+<summary>图片里的中文显示为方框</summary>
 
-## 常见问题
+在 AstrBot 所在系统或容器中安装中文字体（如 `fonts-noto-cjk`）后重启 AstrBot。当天已缓存的图片需要删除对应日期目录后重新生成。
 
-### 今日运势只返回文字，没有图片
+</details>
 
-通常是浏览器没有安装、运行依赖缺失，或 `browser_executable_path` 填写错误。请确认安装命令使用的是 AstrBot 的 Python 环境，并查看 AstrBot 日志中的「今日运势图片生成失败」记录。
+<details>
+<summary>今日老婆 / MD 图片发送失败</summary>
 
-### 图片中的中文显示为方框
+请确认图床上传成功，返回的是公开图片直链而不是预览网页，并且 QQ 服务器能访问它。若机器人下载不了 GitHub 上的角色原图，可以把 `wife_image_base` 换成同路径镜像。
 
-在 AstrBot 所在系统或容器中安装中文字体，例如 `fonts-noto-cjk`，然后重启 AstrBot。当天已缓存的图片需要清理后重新生成。
+失败时日志会标出出错阶段（图床配置、准备图片、压缩图片、图床上传或 QQ 发送），并记录 HTTP 状态、平台错误码和 trace_id，方便排查。失败后保留当天角色，不会重新抽取。若图片只显示「图片」二字，请先核对公开图片地址能否直接打开。
 
-### 今日老婆图片发送失败
+</details>
 
-MD 模式下请确认图床上传成功，返回的是公开图片直链而非预览网页，并检查 QQ 服务器是否能访问它。若机器人本身无法下载 GitHub 角色原图，可以将 `wife_image_base` 改为同路径镜像。
+<details>
+<summary>还是会出现额外的 AI 回复</summary>
 
-插件已启用图片资源校验，图片转存错误码 `304010`／`40034004`／`40034141` 默认最多重试 3 次，可在图床配置中修改；失败后会保留当天角色，不会重新抽取。日志会依次记录上传图片字节数、取得图床地址、开始 QQ 请求和平台返回结果；QQ 请求日志包含 `markdown.force_verify_image_resource=True`，失败日志包含 HTTP 状态、平台错误码和 trace_id，并明确记录重试。最终失败时，老婆 MD 标出「图床配置」「准备图片」「图床上传」或「QQ 发送」阶段，运势 MD 标出「压缩图片」「图床上传」或「QQ 发送」阶段。
+插件指令优先级为 `1`，接管后会禁止默认 LLM 请求并停止事件传播。若仍有额外回复，请在 AstrBot 调试日志中查看 `plugin ->` 执行顺序，确认是哪个处理器发起了 LLM 请求。
 
-MD 在 QQ 发送前失败，或 QQ 平台明确返回错误码时，消息必然未发出，插件会改发普通合成图，日志记录「MD 未发出，改发普通…」。QQ 请求超时或响应异常时发送结果不明，只回复提示文字，不再补发图片，避免重复消息。
+</details>
 
-QQ 请求超过 35 秒将报超时且不自动重发。取得图床地址只表示上传完成或命中缓存；平台返回消息 ID 只表示接收消息，都不能代替客户端实际图片展示检查。图片只显示「图片」文字时，请先更新至包含图片宽高标记的版本，再核对公开图片地址能否直接打开。
+<details>
+<summary>为什么重复发送，结果没有变化？</summary>
 
-### 为什么重复发送命令，结果没有变化？
+这是每日抽签的正常行为，运势和角色按北京时间每天更新。如需重新生成运势图片，可删除 `cards/` 下对应日期目录：吉凶宜忌不变，插画和一言可能变化。
 
-这是每日抽签的正常行为。运势与角色按北京时间每天更新，当天重复请求会复用结果。
+</details>
 
-数据保存在 `data/plugin_data/astrbot_plugin_daily_fortune/` 下。其中 `cards/` 是运势图片缓存；如需重新生成图片，可删除对应日期目录。清除成图后，吉凶宜忌不变，插画和一言可能变化。
+## 💛 致谢
 
-## 来源与许可
-
-作者：[yun474](https://github.com/yun474)。代码采用 [MIT 许可证](LICENSE)。
-
-- [astrbot_plugin_jrys](https://github.com/fiatlux2333/astrbot_plugin_jrys)：每日抽签与 HTML 截图思路参考。
+- [fiatlux2333/astrbot_plugin_jrys](https://github.com/fiatlux2333/astrbot_plugin_jrys)：每日抽签与 HTML 截图思路参考。
 - [一言](https://developer.hitokoto.cn/sentence/)：运势卡句子来源。
 - [妖狐图库](https://acg.yaohud.cn/)：默认运势背景来源，仅限非商业用途。
 - [monbed/wife](https://github.com/monbed/wife)：今日老婆角色图库。
 
-第三方插画版权归原作者，不随代码以 MIT 许可重新授权；图片与预览素材说明见 [图片来源](assets/NOTICE.md)。
+项目代码遵循 [MIT 许可证](LICENSE)。第三方插画版权归原作者，不随代码重新授权，详见 [图片来源](assets/NOTICE.md)。
+
+---
+
+<div align="center">
+
+喜欢的话，给云云点一颗 ⭐ 吧！
+
+[更新日志](CHANGELOG.md) · [反馈问题](https://github.com/yun474/astrbot_plugin_daily_fortune/issues) · [MIT License](LICENSE)
+
+**插件问题反馈 QQ 群：947667614**
+
+</div>
