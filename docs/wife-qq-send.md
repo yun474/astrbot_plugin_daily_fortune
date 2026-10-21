@@ -4,7 +4,7 @@
 
 消息内容见 `wife-qq-markdown.md`，完整请求体见 `wife-qq-payload.json`：开头艾特触发用户，随后显示角色名、作品名和角色原图。
 
-两个指令按钮为“今日老婆”“今日运势”，`action.type=2`、`enter=true`、`permission.type=2`。按钮 data 只放这四个汉字，不加斜杠、唤醒词或手工拼接机器人艾特。QQ 自动插入 @机器人，点击者成为新命令的发送者。
+两个指令按钮为“今日老婆”“今日运势”，`action.type=2`、`enter=true`、`permission.type=2`。按钮 data 默认只放这四个汉字，配置 `qq_command_prefix` 后将其原样拼接在指令前；不手工拼接机器人艾特。QQ 自动插入 @机器人，点击者成为新命令的发送者。
 
 `force_verify_image_resource: true` 放在 `markdown` 对象内，与 `content` 同级。QQ 官方群聊、单聊发送接口都将它定义为 `MessageMarkdown` 的字段；放在请求体顶层不符合该结构。首次发送就开启，图片转存失败时由平台返回错误并阻止发送。
 
@@ -12,7 +12,7 @@
 
 MD 模式先将图片上传至配置的图床，再将返回的公网地址写入请求。force_verify_image_resource 用于校验，不会让不可达地址变得可达。两个功能共用图床配置与重试次数。
 
-按当前需求直接发送自定义按钮，不以旧文档的“内邀”标注阻止发送。权限或参数错误会记录并报告失败，不盲目重试。
+按当前需求直接发送自定义按钮，不以旧文档的“内邀”标注阻止发送。权限或参数错误会记录日志，不盲目重试；平台明确返回错误码说明消息未发出，插件改发普通合成图。超时等结果不明的情况只回复提示，不补发图片。
 
 来源：
 - [QQ 官方 Markdown 文档](https://bot.q.qq.com/wiki/develop/api-v2/server-inter/message/type/markdown.html)

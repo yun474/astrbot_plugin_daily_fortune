@@ -108,7 +108,7 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
     assert "宜：" in result[0][1] and "忌：" in result[0][1]
 
     async def select(uid, day):
-        return {"name": "芙宁娜", "work": "原神", "url": "https://example.com/wife.jpg"}
+        return {"name": "芙宁娜", "work": "原神", "url": "https://example.com/wife.jpg", "day": "2026-10-21"}
 
     plugin.wife.select = fail
     assert await dispatch(plugin.daily_wife) == [
@@ -126,8 +126,10 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
     plugin.qq_wife_markdown = True
     event.message_obj.raw_message.group_openid = "GROUP"
     uploads = []
+    downloads = []
 
     async def download(url):
+        downloads.append(url)
         return default_avatar()
 
     async def upload(data, day):
@@ -156,12 +158,46 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
     async def upload_fail(*args):
         raise ValueError("图床未配置")
 
+    async def fallback_card(uid, item, avatar):
+        return tmp_path / "wife.png"
+
+    plugin.wife.card = fallback_card
     plugin.image_host.upload = upload_fail
-    failed_fortune = await dispatch(plugin.daily_fortune)
-    failed_wife = await dispatch(plugin.daily_wife)
-    assert failed_fortune[0][0] == failed_wife[0][0] == "plain"
-    assert "图床配置" in failed_fortune[0][1] and "图床配置" in failed_wife[0][1]
+    # 发送前失败时消息必然未发出，改发普通图片
+    assert await dispatch(plugin.daily_fortune) == [("image", str(tmp_path / "card.png"))]
+    assert await dispatch(plugin.daily_wife) == [("image", str(tmp_path / "wife.png"))]
     assert len(sent) == 2  # Never send the original remote URL after upload failure.
+    # 当天压缩图已缓存，再次发送老婆 MD 不重新下载原图
+    assert downloads == ["https://example.com/wife.jpg"]
+
+    def invalid_host():
+        raise ValueError("图床未配置")
+
+    plugin.image_host.validate = invalid_host
+    assert await dispatch(plugin.daily_wife) == [("image", str(tmp_path / "wife.png"))]
+    plugin.image_host.validate = lambda: None
+    plugin.image_host.upload = upload
+
+    async def rejected(*args, **kwargs):
+        raise module.QQSendError(400, {"code": 304010, "message": "转存失败"}, "TRACE")
+
+    async def unknown(*args, **kwargs):
+        raise asyncio.TimeoutError
+
+    async def unsupported(*args, **kwargs):
+        return False
+
+    for handler, image in ((plugin.daily_fortune, "card.png"), (plugin.daily_wife, "wife.png")):
+        # 平台明确拒绝或事件不支持 MD 时同样改发普通图片
+        for send in (rejected, unsupported):
+            monkeypatch.setattr(module, "send_markdown", send)
+            assert await dispatch(handler) == [("image", str(tmp_path / image))]
+        # 发送结果不明时只提示，不再补发图片，避免重复消息
+        monkeypatch.setattr(module, "send_markdown", unknown)
+        result = await dispatch(handler)
+        assert len(result) == 1 and result[0][0] == "plain"
+        assert "结果不明" in result[0][1]
+    monkeypatch.setattr(module, "send_markdown", send_md)
     event.get_platform_name = lambda: "aiocqhttp"
     event.get_sender_id = lambda: "123456"
 

@@ -14,7 +14,7 @@ import aiohttp
 
 from .avatar import field
 from .renderer import ASSETS, build_wife_html
-from .service import normalize_image
+from .service import markdown_image, normalize_image
 from .settings import number
 
 logger = logging.getLogger("astrbot")
@@ -74,6 +74,25 @@ class WifeService:
                 finally:
                     temporary.unlink(missing_ok=True)
                 return target
+
+    async def markdown_picture(self, item):
+        """MD 用的压缩图按日期和角色缓存，当天重复发送不再下载原图。"""
+        service = self.service
+        key = hashlib.sha256(item["url"].encode()).hexdigest()
+        target = service.cache / item["day"] / f"wife-md-{key}.jpg"
+        async with service._locks[int(key[:2], 16) % len(service._locks)]:
+            if target.is_file():
+                return await asyncio.to_thread(target.read_bytes)
+            picture = await service._download(item["url"])
+            picture = await asyncio.to_thread(markdown_image, picture)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            temporary = target.with_suffix(".tmp.jpg")
+            try:
+                await asyncio.to_thread(temporary.write_bytes, picture)
+                temporary.replace(target)
+            finally:
+                temporary.unlink(missing_ok=True)
+            return picture
 
     async def select(self, uid, day):
         key = hashlib.sha256(uid.encode()).hexdigest()

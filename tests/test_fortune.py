@@ -20,8 +20,8 @@ def event(platform, author, uid="OPENID", appid="12345"):
 def test_daily_draw_matches_approved_preview():
     view = draw("github:yun474", "2026-09-29")
     assert view["fortune"] == "中吉"
-    assert [x[0] for x in view["good"]] == ["熬夜", "听歌"]
-    assert [x[0] for x in view["bad"]] == ["尝试新事物", "购物"]
+    assert [x[0] for x in view["good"]] == ["摸鱼", "熬夜"]
+    assert [x[0] for x in view["bad"]] == ["写代码", "画画"]
     assert view == draw("github:yun474", "2026-09-29")
 
 

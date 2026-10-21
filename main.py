@@ -14,16 +14,21 @@ from .hosting import ImageHost, migrate_host_config
 from .service import FortuneService, markdown_image
 from .settings import number
 from .targets import target_user
-from .wife import WifeService, send_markdown, supports_markdown
+from .wife import QQSendError, WifeService, send_markdown, supports_markdown
 
 logger = logging.getLogger("astrbot")
+
+
+def markdown_unsent(stage, error):
+    """QQ 发送前失败或平台明确返回错误时消息必然未发出，可以改发普通图片。"""
+    return stage != "QQ 发送" or isinstance(error, QQSendError)
 
 
 @register(
     "astrbot_plugin_daily_fortune",
     "yun474",
     "今日运势与二次元老婆",
-    "0.2.3",
+    "0.2.4",
     "https://github.com/yun474/astrbot_plugin_daily_fortune",
 )
 class DailyFortune(Star):
@@ -78,12 +83,11 @@ class DailyFortune(Star):
             event.stop_event()
             return
         if self.qq_wife_markdown and supports_markdown(event):
-            stage = "下载原图"
+            stage = "图床配置"
             try:
                 self.image_host.validate()
-                picture = await self.service._download(item["url"])
-                stage = "压缩图片"
-                picture = await asyncio.to_thread(markdown_image, picture)
+                stage = "准备图片"
+                picture = await self.wife.markdown_picture(item)
                 with Image.open(io.BytesIO(picture)) as decoded:
                     width, height = decoded.size
                 stage = "图床上传"
@@ -99,13 +103,15 @@ class DailyFortune(Star):
                 ):
                     event.stop_event()
                     return
-            except Exception:
+            except Exception as exc:
                 logger.exception("今日老婆 Markdown 失败，阶段：%s", stage)
-                yield event.plain_result(
-                    f"今日老婆 MD 失败（{stage}），请查看日志；当天角色已保留。图床配置与 QQ 发送分别检查。"
-                )
-                event.stop_event()
-                return
+                if not markdown_unsent(stage, exc):
+                    yield event.plain_result(
+                        "今日老婆 MD 发送结果不明（QQ 发送），请查看日志；当天角色已保留。"
+                    )
+                    event.stop_event()
+                    return
+                logger.warning("今日老婆 MD 未发出，改发普通合成图")
         try:
             image = await self.wife.card(uid, item, avatar_url(event))
         except Exception:
@@ -143,22 +149,24 @@ class DailyFortune(Star):
                 url = await self.image_host.upload(data, date)
                 stage = "QQ 发送"
                 logger.info("今日运势 MD：图床地址已取得，开始 QQ 发送")
-                if not await send_markdown(
+                if await send_markdown(
                     event,
                     {"url": url, "width": width, "height": height},
                     retries=self.image_host.retries,
                     fortune=True,
                     command_prefix=self.qq_command_prefix,
                 ):
-                    raise RuntimeError("当前事件不支持 QQ Markdown")
-                event.stop_event()
-            except Exception:
+                    event.stop_event()
+                    return
+            except Exception as exc:
                 logger.exception("今日运势 Markdown 失败，阶段：%s", stage)
-                yield event.plain_result(
-                    f"今日运势 MD 失败（{stage}），请查看日志；图床配置与 QQ 发送分别检查。"
-                )
-                event.stop_event()
-            return
+                if not markdown_unsent(stage, exc):
+                    yield event.plain_result(
+                        "今日运势 MD 发送结果不明（QQ 发送），请查看日志。"
+                    )
+                    event.stop_event()
+                    return
+                logger.warning("今日运势 MD 未发出，改发普通运势卡")
         yield event.image_result(str(image))
         event.stop_event()
 
