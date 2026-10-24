@@ -20,15 +20,20 @@ logger = logging.getLogger("astrbot")
 
 
 def markdown_unsent(stage, error):
-    """QQ 发送前失败或平台明确返回错误时消息必然未发出，可以改发普通图片。"""
-    return stage != "QQ 发送" or isinstance(error, QQSendError)
+    """QQ 发送前失败或平台明确返回错误码时消息必然未发出，可以改发普通图片。
+
+    网关 502 等不带错误码的异常响应无法确认是否已送达，按发送结果不明处理。
+    """
+    return stage != "QQ 发送" or (
+        isinstance(error, QQSendError) and error.code not in ("", "0")
+    )
 
 
 @register(
     "astrbot_plugin_daily_fortune",
     "yun474",
     "今日运势与二次元老婆",
-    "0.2.4",
+    "0.2.5",
     "https://github.com/yun474/astrbot_plugin_daily_fortune",
 )
 class DailyFortune(Star):
