@@ -51,9 +51,12 @@ async def test_cleanup_retention_and_abandoned_images(tmp_path, days, boundary, 
             (folder / name).write_bytes(b"test")
     stale = service.cache / "2026-09-29" / ("a" * 64 + ".tmp.png")
     active = service.cache / "2026-09-29" / ("wife-" + "b" * 64 + ".tmp.png")
+    stale_md = service.cache / "2026-09-29" / ("wife-md-" + "c" * 64 + ".tmp.jpg")
     stale.write_bytes(b"partial")
     active.write_bytes(b"partial")
+    stale_md.write_bytes(b"partial")
     os.utime(stale, (time.time() - 90000,) * 2)
+    os.utime(stale_md, (time.time() - 90000,) * 2)
     unrelated = service.cache / "keep"
     unrelated.mkdir()
     (unrelated / "note.txt").write_text("keep")
@@ -61,6 +64,7 @@ async def test_cleanup_retention_and_abandoned_images(tmp_path, days, boundary, 
     assert not (service.cache / expired).exists()
     assert (service.cache / boundary / "original-card.png").exists()
     assert not stale.exists() and active.exists() and unrelated.exists()
+    assert not stale_md.exists()
     # A later sweep on the same date must still remove newly abandoned files.
     os.utime(active, (time.time() - 90000,) * 2)
     await service.cleanup("2026-09-29")
@@ -199,3 +203,14 @@ def test_markdown_image_bounds_size_and_preserves_original():
         assert decoded.format == 'JPEG'
         assert max(decoded.size) <= 1600
     assert original.getvalue() == data
+
+
+def test_high_resolution_jpeg_is_accepted():
+    # 图库中存在 3000 万像素以上的高清插画，合成图与 MD 压缩都应正常缩小
+    from daily_fortune_test.service import markdown_image
+    source = io.BytesIO()
+    Image.new("RGB", (4500, 7000), (200, 120, 150)).save(source, "JPEG")
+    data = source.getvalue()
+    for result in (normalize_image(data), markdown_image(data)):
+        with Image.open(io.BytesIO(result)) as decoded:
+            assert max(decoded.size) == 1600

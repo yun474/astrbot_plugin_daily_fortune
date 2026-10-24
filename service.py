@@ -19,12 +19,21 @@ from .settings import number
 logger = logging.getLogger("astrbot")
 FALLBACK_QUOTE = ("把今天过好，就是给明天最好的礼物。", "今日寄语", "内置寄语")
 MAX_DOWNLOAD = 12 * 1024 * 1024
+# 图库中存在近 4000 万像素的高清插画，上限需留出余量，同时低于 Pillow 自身的解压炸弹阈值
+MAX_PIXELS = 60_000_000
+
+
+def _prepare(source, size):
+    """校验像素上限；需要缩小的 JPEG 直接按目标尺寸降采样解码，降低内存占用。"""
+    if source.width * source.height > MAX_PIXELS:
+        raise ValueError("图片尺寸过大")
+    if size is not None and source.format == "JPEG":
+        source.draft("RGB", size)
 
 
 def normalize_image(data: bytes, size=(1600, 1600)) -> bytes:
     with Image.open(io.BytesIO(data)) as image:
-        if image.width * image.height > 25_000_000:
-            raise ValueError("图片尺寸过大")
+        _prepare(image, size)
         image = ImageOps.exif_transpose(image).convert("RGB")
         if size is not None:
             image.thumbnail(size)
@@ -46,8 +55,7 @@ def default_avatar() -> bytes:
 def markdown_image(data: bytes) -> bytes:
     """Bound MD images to 1600px and 1 MiB without changing original retrieval."""
     with Image.open(io.BytesIO(data)) as source:
-        if source.width * source.height > 25_000_000:
-            raise ValueError("图片尺寸过大")
+        _prepare(source, (1600, 1600))
         image = ImageOps.exif_transpose(source).convert("RGBA")
         image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
         background = Image.new("RGBA", image.size, "white")
@@ -165,8 +173,8 @@ class FortuneService:
                             and not path.is_symlink() and path.is_file()
                             and time.time() - path.stat().st_mtime > 86400):
                         path.unlink()
-                for path in folder.glob("*.tmp.png"):
-                    if (re.fullmatch(r"(?:wife-|original-)?[0-9a-f]{64}\.tmp\.png", path.name)
+                for path in folder.glob("*.tmp.*"):
+                    if (re.fullmatch(r"(?:wife-|original-)?[0-9a-f]{64}\.tmp\.png|wife-md-[0-9a-f]{64}\.tmp\.jpg", path.name)
                             and not path.is_symlink() and path.is_file()
                             and time.time() - path.stat().st_mtime > 86400):
                         path.unlink()

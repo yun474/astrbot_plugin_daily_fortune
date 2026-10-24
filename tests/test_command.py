@@ -184,6 +184,10 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
     async def unknown(*args, **kwargs):
         raise asyncio.TimeoutError
 
+    async def bad_gateway(*args, **kwargs):
+        # 网关 502 只带描述、没有平台错误码，无法确认消息是否已送达
+        raise module.QQSendError(502, {"message": "Bad Gateway"}, None)
+
     async def unsupported(*args, **kwargs):
         return False
 
@@ -193,10 +197,11 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
             monkeypatch.setattr(module, "send_markdown", send)
             assert await dispatch(handler) == [("image", str(tmp_path / image))]
         # 发送结果不明时只提示，不再补发图片，避免重复消息
-        monkeypatch.setattr(module, "send_markdown", unknown)
-        result = await dispatch(handler)
-        assert len(result) == 1 and result[0][0] == "plain"
-        assert "结果不明" in result[0][1]
+        for send in (unknown, bad_gateway):
+            monkeypatch.setattr(module, "send_markdown", send)
+            result = await dispatch(handler)
+            assert len(result) == 1 and result[0][0] == "plain"
+            assert "结果不明" in result[0][1]
     monkeypatch.setattr(module, "send_markdown", send_md)
     event.get_platform_name = lambda: "aiocqhttp"
     event.get_sender_id = lambda: "123456"
