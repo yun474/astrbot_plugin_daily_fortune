@@ -10,6 +10,7 @@ from xml.etree import ElementTree
 import aiohttp
 from yarl import URL
 
+from .material import QQ_MATERIAL
 from .settings import number
 
 
@@ -49,9 +50,18 @@ S3_ERRORS = {
 
 
 def migrate_host_config(config):
-    """Move the old shared fields to the selected provider once, before saving."""
+    """将旧版共享字段迁入图床分组，并保留仅有旧 HTTP 参数的用户选择。"""
     host = config.get("image_host", {})
     provider = host.get("provider", "自定义 HTTP")
+    # 0.1.x 没有 provider，框架补默认值后看起来会像新安装的素材库配置。
+    # 只识别尚未使用新版分组的旧 HTTP 配置，已有分组或素材库设置优先。
+    qq = host.get("qq", {})
+    if (provider == QQ_MATERIAL and host.get("upload_url")
+            and not any(host.get(section, {}).get(key)
+                        for section in PROVIDER_SECTIONS.values()
+                        for key in ("upload_url", "endpoint"))
+            and qq.get("cache_minutes", 0) == 0 and qq.get("usage_command", True) is True):
+        provider = host["provider"] = "自定义 HTTP"
     section = PROVIDER_SECTIONS.get(provider)
     defaults = {key: "" for key in (*HTTP_FIELDS, *S3_FIELDS)}
     defaults.update(file_field="file", url_path="data.links.url",
@@ -62,7 +72,7 @@ def migrate_host_config(config):
     if provider == "兰空 Lsky Pro V2":
         fields = HTTP_FIELDS[:2]
     target = host.setdefault(section, {})
-    # Schema defaults may already be present; an existing destination wins.
+    # 框架可能已补入分组默认值；用户填好的目标配置优先。
     if not target.get(fields[0]):
         target.update({key: host[key] for key in fields if key in host})
     host.update(defaults)
@@ -101,6 +111,9 @@ class ImageHost:
         self._identity = hashlib.sha256(json.dumps(destination, sort_keys=True).encode()).hexdigest()
 
     def validate(self):
+        if self.provider == QQ_MATERIAL:
+            # 素材库沿用 QQ 官方机器人自身的鉴权，没有需要填写的参数。
+            return
         if self.provider in S3_PROVIDERS:
             for key in ("endpoint", "public_base_url"):
                 parsed = urlsplit(http_url(self.config.get(key, "")))

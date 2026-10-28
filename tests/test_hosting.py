@@ -10,6 +10,7 @@ from aiohttp import web
 from daily_fortune_test.hosting import (
     HTTP_PROVIDERS, S3_PROVIDERS, PROVIDER_SECTIONS, ImageHost, migrate_host_config,
 )
+from daily_fortune_test.material import QQ_MATERIAL
 from daily_fortune_test.service import FortuneService, default_avatar
 from daily_fortune_test.wife import send_markdown
 from test_wife import event, ITEM
@@ -283,8 +284,22 @@ def test_provider_dropdown_covers_all_adapters():
     from pathlib import Path
     schema = json.loads((Path(__file__).parents[1] / '_conf_schema.json').read_text('utf-8'))
     provider = schema['image_host']['items']['provider']
-    assert provider['default'] == '自定义 HTTP'
-    assert set(provider['options']) == HTTP_PROVIDERS | S3_PROVIDERS.keys()
+    assert provider['default'] == QQ_MATERIAL
+    assert set(provider['options']) == HTTP_PROVIDERS | S3_PROVIDERS.keys() | {QQ_MATERIAL}
+
+
+def test_qq_material_needs_no_settings(tmp_path):
+    from pathlib import Path
+    schema = json.loads((Path(__file__).parents[1] / '_conf_schema.json').read_text('utf-8'))
+    items = schema['image_host']['items']
+    visible = {key for key, item in items.items() if not item.get('invisible')
+               and all({'provider': QQ_MATERIAL}.get(k) == v
+                       for k, v in item.get('condition', {}).items())}
+    assert visible == {'provider', 'qq', 'retry_count', 'timeout_seconds'}
+    assert set(items['qq']['items']) == {'cache_minutes', 'usage_command'}
+    host = ImageHost(FortuneService({'image_host': {'provider': QQ_MATERIAL}}, tmp_path))
+    host.validate()
+    assert not migrate_host_config({'image_host': {'provider': QQ_MATERIAL}})
 
 
 @pytest.mark.parametrize('provider,section', PROVIDER_SECTIONS.items())
@@ -351,6 +366,43 @@ def test_legacy_migration_does_not_replace_configured_section():
     host['r2'] = {'endpoint': 'https://new.example.com', 'bucket': 'new-bucket'}
     assert migrate_host_config({'image_host': host})
     assert host['r2'] == {'endpoint': 'https://new.example.com', 'bucket': 'new-bucket'}
+
+
+def test_legacy_http_survives_schema_default_and_later_explicit_qq_selection():
+    from pathlib import Path
+    schema = json.loads((Path(__file__).parents[1] / '_conf_schema.json').read_text('utf-8'))
+    # 模拟框架递归补齐新默认值；旧版仅有平铺的 HTTP 参数。
+    host = {}
+    for key, item in schema['image_host']['items'].items():
+        host[key] = ({k: child['default'] for k, child in item['items'].items()}
+                     if item['type'] == 'object' else item['default'])
+    host.update(upload_url='https://old.example.com/upload', authorization='Bearer legacy',
+                file_field='image', url_path='data.url')
+    config = {'image_host': host}
+    assert migrate_host_config(config)
+    assert host['provider'] == '自定义 HTTP'
+    assert host['http'] == {'upload_url': 'https://old.example.com/upload',
+                            'authorization': 'Bearer legacy', 'file_field': 'image',
+                            'url_path': 'data.url'}
+    assert host['upload_url'] == host['authorization'] == ''
+    assert not migrate_host_config(config)
+    # 完成迁移后用户主动选择素材库，重载时不能再次切回旧图床。
+    host['provider'] = QQ_MATERIAL
+    assert not migrate_host_config(config)
+    assert host['provider'] == QQ_MATERIAL
+
+
+@pytest.mark.parametrize('configured', [
+    {'http': {'upload_url': 'https://new.example.com/upload'}},
+    {'r2': {'endpoint': 'https://storage.example.com'}},
+    {'qq': {'cache_minutes': 5}},
+    {'qq': {'usage_command': False}},
+    {'upload_url': ''},
+])
+def test_qq_selection_with_new_settings_is_not_replaced_by_legacy_fields(configured):
+    host = {'provider': QQ_MATERIAL, 'upload_url': 'https://old.example.com/upload', **configured}
+    assert not migrate_host_config({'image_host': host})
+    assert host['provider'] == QQ_MATERIAL
 
 
 @pytest.mark.parametrize('body,expected', [
