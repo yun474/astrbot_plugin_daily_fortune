@@ -8,7 +8,7 @@ import pytest
 from aiohttp import web
 from botpy.http import BotHttp, Route
 
-from daily_fortune_test.wife import send_markdown
+from daily_fortune_test.wife import QQSendError, send_markdown
 from test_wife import ITEM
 
 
@@ -111,3 +111,22 @@ async def test_platform_codes_control_retries_and_failure_is_reported(
     assert len(calls) == expected
     assert all(body == calls[0] for body in calls)
     assert str(code) in caplog.text and 'failure-trace' in caplog.text
+
+
+@pytest.mark.parametrize('body', ['Bad Gateway', 'null', '[]'])
+async def test_unknown_gateway_response_never_retries_or_allows_fallback(monkeypatch, tmp_path, body):
+    from test_command import load_main
+    module, _, _, _ = load_main(monkeypatch, tmp_path)
+    calls = []
+
+    async def handler(request):
+        calls.append(await request.json())
+        return web.Response(status=502, text=body, headers={'X-Tps-trace-ID': 'unknown-trace'})
+
+    async with qq_server(monkeypatch, handler) as event:
+        with pytest.raises(QQSendError) as error:
+            await send_markdown(event, ITEM, retries=3)
+    assert len(calls) == 1
+    assert error.value.status == 502 and error.value.code == ''
+    assert 'unknown-trace' in str(error.value)
+    assert not module.markdown_unsent('QQ 发送', error.value)

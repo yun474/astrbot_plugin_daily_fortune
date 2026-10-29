@@ -5,13 +5,11 @@ from types import ModuleType
 from types import SimpleNamespace as NS
 
 import pytest
+from daily_fortune_test.material import MaterialUnavailable
 from daily_fortune_test.service import default_avatar
 
 
-@pytest.mark.asyncio
-async def test_command_returns_image_and_plain_fallback_without_nickname(
-    monkeypatch, tmp_path
-):
+def load_main(monkeypatch, tmp_path):
     # Minimal public AstrBot contracts; this is not a live platform send test.
     api = ModuleType("astrbot.api")
     api.AstrBotConfig = dict
@@ -19,6 +17,7 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
     event_api.AstrMessageEvent = object
     commands = []
     priorities = {}
+    admins = set()
 
     def command(name, alias, *, priority=0):
         commands.append((name, alias))
@@ -29,7 +28,16 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
 
         return register
 
-    event_api.filter = NS(command=command)
+    def permission_type(kind, raise_error=True):
+        def register(fn):
+            admins.add(fn.__name__)
+            fn.permission_raise_error = raise_error
+            return fn
+
+        return register
+
+    event_api.filter = NS(command=command, permission_type=permission_type,
+                          PermissionType=NS(ADMIN="admin"))
     star_api = ModuleType("astrbot.api.star")
 
     class Star:
@@ -43,8 +51,19 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
     monkeypatch.setitem(sys.modules, "astrbot", ModuleType("astrbot"))
     for module in (api, event_api, star_api):
         monkeypatch.setitem(sys.modules, module.__name__, module)
+    # 每个测试都用当次的替身重新导入插件入口。
+    monkeypatch.delitem(sys.modules, "daily_fortune_test.main", raising=False)
     module = importlib.import_module("daily_fortune_test.main")
+    return module, commands, priorities, admins
+
+
+@pytest.mark.asyncio
+async def test_command_returns_image_and_plain_fallback_without_nickname(
+    monkeypatch, tmp_path
+):
+    module, commands, priorities, admins = load_main(monkeypatch, tmp_path)
     plugin = module.DailyFortune(None, {"qq_command_prefix": "/"})
+    assert ("运势素材库", set()) in commands and admins == {"material_usage"}
     assert ("今日运势", {"jrys", "运势"}) in commands
     assert ("今日老婆", {"jrlp", "抽老婆"}) in commands
     assert ("运势原图", set()) in commands
@@ -278,3 +297,153 @@ async def test_command_returns_image_and_plain_fallback_without_nickname(
     await asyncio.wait_for(completed.wait(), timeout=1)
     await plugin.terminate()
     assert plugin._cleanup_task.done()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("admin", [False, True])
+async def test_material_permission_gate_keeps_disabled_command_silent(monkeypatch, tmp_path, enabled, admin):
+    from unittest.mock import AsyncMock
+    module, _, _, _ = load_main(monkeypatch, tmp_path)
+    plugin = module.DailyFortune(None, {"image_host": {"qq": {"usage_command": enabled}}})
+    plugin.material.purge = AsyncMock(return_value={"deleted": 0, "failed": 0, "skipped": 0, "remaining": 0})
+    event = NS(get_platform_name=lambda: "qq_official", stopped=False, send=AsyncMock(),
+               should_call_llm=lambda _: None, plain_result=lambda text: text)
+    event.stop_event = lambda: setattr(event, "stopped", True)
+    handler = plugin.material_usage
+    results = []
+    try:
+        # 权限过滤发生在处理器执行之前；普通用户不能绕过权限执行删除。
+        if not admin:
+            if handler.permission_raise_error:
+                await event.send("权限不足")
+                event.stop_event()
+        else:
+            results = [reply async for reply in handler(event, "删除全部")]
+        event.send.assert_not_awaited()
+        if enabled and admin:
+            plugin.material.purge.assert_awaited_once_with(event, True)
+            assert results and event.stopped
+        else:
+            plugin.material.purge.assert_not_awaited()
+            assert not results and not event.stopped
+    finally:
+        await plugin.terminate()
+
+
+async def collect(handler, *args):
+    return [result async for result in handler(*args)]
+
+
+async def test_material_markdown_releases_images_and_falls_back(monkeypatch, tmp_path):
+    module, *_ = load_main(monkeypatch, tmp_path)
+    plugin = module.DailyFortune(None, {
+        "qq_fortune_markdown": True, "qq_wife_markdown": True,
+        "image_host": {"provider": "QQ 素材库", "qq": {"cache_minutes": 5}},
+    })
+    assert plugin.material.cache_minutes == 5 and plugin.material_command
+    event = NS(
+        get_platform_id=lambda: "official-1",
+        get_platform_name=lambda: "qq_official",
+        get_sender_id=lambda: "OPENID",
+        message_obj=NS(raw_message=NS(group_openid="GROUP", author=NS(member_openid="OPENID"))),
+        bot=NS(platform=NS(appid="123")),
+        image_result=lambda path: ("image", path),
+        plain_result=lambda text: ("plain", text),
+        should_call_llm=lambda value: None,
+        stop_event=lambda: None,
+    )
+    (tmp_path / "card.png").write_bytes(default_avatar())
+
+    async def card(*args):
+        return tmp_path / "card.png"
+
+    async def wife_card(*args):
+        return tmp_path / "wife.png"
+
+    async def select(uid, day):
+        return {"name": "芙宁娜", "work": "原神", "url": "https://example.com/wife.jpg", "day": day}
+
+    async def download(url):
+        return default_avatar()
+
+    async def host_upload(*args):
+        raise AssertionError("选用素材库时不应调用自建图床")
+
+    log = []
+
+    async def upload(event, data):
+        log.append(("upload", len(data)))
+        return f"IMG{len(log)}", f"qqbot-media://image/v1/{len(log)}"
+
+    async def release(event, image_id):
+        log.append(("release", image_id))
+
+    plugin.service.card = card
+    plugin.wife.card = wife_card
+    plugin.wife.select = select
+    plugin.service._download = download
+    plugin.image_host.upload = host_upload
+    plugin.material.upload = upload
+    plugin.material.release = release
+    plugin.material.forget = lambda event, image_id: log.append(("forget", image_id))
+    sent = []
+
+    async def send_md(event, item, **kwargs):
+        sent.append(item["url"])
+        # 发送时图片仍被占用，发送结束后才回收。
+        assert log[-1][0] == "upload"
+        return True
+
+    monkeypatch.setattr(module, "send_markdown", send_md)
+    assert await collect(plugin.daily_fortune, event) == []
+    assert await collect(plugin.daily_wife, event) == []
+    assert sent == ["qqbot-media://image/v1/1", "qqbot-media://image/v1/3"]
+    assert [entry[0] for entry in log] == ["upload", "release"] * 2
+    assert log[1] == ("release", "IMG1") and log[3] == ("release", "IMG3")
+
+    async def invalid(*args, **kwargs):
+        raise module.QQSendError(400, {"code": 40035009, "message": "expired"}, "TRACE")
+
+    # 引用失效：作废缓存并回收，改发普通图片。
+    log.clear()
+    monkeypatch.setattr(module, "send_markdown", invalid)
+    assert await collect(plugin.daily_fortune, event) == [("image", str(tmp_path / "card.png"))]
+    assert log == [("upload", log[0][1]), ("forget", "IMG1"), ("release", "IMG1")]
+
+    async def unavailable(*args):
+        raise MaterialUnavailable("QQ 素材库已满")
+
+    # 素材库不可用时消息必然未发出，改发普通图片。
+    plugin.material.upload = unavailable
+    monkeypatch.setattr(module, "send_markdown", send_md)
+    assert await collect(plugin.daily_wife, event) == [("image", str(tmp_path / "wife.png"))]
+    assert len(sent) == 2
+
+    async def usage(event):
+        return {"total": 7, "ours": 2, "cached": 1, "stale": 0, "others": 5}
+
+    purges = []
+
+    async def purge(event, everything=False):
+        purges.append(everything)
+        return {"deleted": 3, "failed": 0, "skipped": 0}
+
+    plugin.material.usage = usage
+    plugin.material.purge = purge
+    result = await collect(plugin.material_usage, event)
+    assert "7/100" in result[0][1] and "5 分钟" in result[0][1]
+    assert "删除 3 张" in (await collect(plugin.material_usage, event, "删除全部"))[0][1]
+    assert "本插件的素材" in (await collect(plugin.material_usage, event, "删除缓存"))[0][1]
+    assert purges == [True, False]
+    assert "用法" in (await collect(plugin.material_usage, event, "随便"))[0][1]
+
+    async def limited(event):
+        raise module.QQSendError(429, {"message": "too many"}, None)
+
+    plugin.material.usage = limited
+    assert "频率限制" in (await collect(plugin.material_usage, event))[0][1]
+    event.get_platform_name = lambda: "aiocqhttp"
+    assert "QQ 官方机器人" in (await collect(plugin.material_usage, event))[0][1]
+    plugin.material_command = False
+    assert await collect(plugin.material_usage, event) == []
+    await plugin.terminate()

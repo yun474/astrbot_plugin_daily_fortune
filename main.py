@@ -1,7 +1,7 @@
 import asyncio
 import io
 import logging
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 
 from astrbot.api import AstrBotConfig
 from astrbot.api.event import AstrMessageEvent, filter
@@ -11,12 +11,16 @@ from PIL import Image
 from .avatar import avatar_url
 from .fortune import draw, text_result, today
 from .hosting import ImageHost, migrate_host_config
+from .material import (
+    INVALID_REFERENCE, QQ_MATERIAL, MaterialLibrary, describe, purge_text, usage_text,
+)
 from .service import FortuneService, markdown_image
 from .settings import number
 from .targets import target_user
 from .wife import QQSendError, WifeService, send_markdown, supports_markdown
 
 logger = logging.getLogger("astrbot")
+QQ_PLATFORMS = {"qq_official", "qq_official_webhook"}
 
 
 def markdown_unsent(stage, error):
@@ -33,7 +37,7 @@ def markdown_unsent(stage, error):
     "astrbot_plugin_daily_fortune",
     "yun474",
     "今日运势与二次元老婆",
-    "0.2.5",
+    "1.0.0",
     "https://github.com/yun474/astrbot_plugin_daily_fortune",
 )
 class DailyFortune(Star):
@@ -49,6 +53,14 @@ class DailyFortune(Star):
         self.qq_fortune_markdown = bool(config.get("qq_fortune_markdown", False))
         self.qq_command_prefix = config.get("qq_command_prefix", "") or ""
         self.image_host = ImageHost(self.service)
+        # 素材库专属设置与当前选用的图床无关，切换到其他图床后仍按已保存的值处理。
+        material = config.get("image_host", {}).get("qq", {})
+        self.material = MaterialLibrary(
+            number(material, "cache_minutes", 0, 0, 1440),
+            self.image_host.retries,
+            self.image_host.timeout,
+        )
+        self.material_command = bool(material.get("usage_command", True))
         self.cleanup_interval = (
             number(config, "cache_cleanup_interval_hours", 6, 1, 168) * 3600
         )
@@ -71,6 +83,23 @@ class DailyFortune(Star):
         while True:
             await asyncio.sleep(self.cleanup_interval)
             await self._cleanup_once()
+
+    @asynccontextmanager
+    async def _hosted(self, event, data, day):
+        """上传 MD 图片并给出地址；素材库图片只服务本条消息，退出时回收。"""
+        if self.image_host.provider != QQ_MATERIAL:
+            yield await self.image_host.upload(data, day)
+            return
+        image_id, url = await self.material.upload(event, data)
+        try:
+            yield url
+        except QQSendError as exc:
+            if exc.code in INVALID_REFERENCE:
+                self.material.forget(event, image_id)
+            raise
+        finally:
+            # QQ 发送时已保存图片副本，删除不影响已发出的消息。
+            await self.material.release(event, image_id)
 
     # Run before default-priority chat listeners; stop only after yielding a reply
     # so AstrBot's response stage can still deliver it.
@@ -97,15 +126,16 @@ class DailyFortune(Star):
                     width, height = decoded.size
                 stage = "图床上传"
                 logger.info("今日老婆 MD：开始上传，图片 %d 字节", len(picture))
-                url = await self.image_host.upload(picture, today())
-                stage = "QQ 发送"
-                logger.info("今日老婆 MD：图床地址已取得，开始 QQ 发送")
-                if await send_markdown(
-                    event,
-                    dict(item, url=url, width=width, height=height),
-                    retries=self.image_host.retries,
-                    command_prefix=self.qq_command_prefix,
-                ):
+                async with self._hosted(event, picture, today()) as url:
+                    stage = "QQ 发送"
+                    logger.info("今日老婆 MD：图床地址已取得，开始 QQ 发送")
+                    sent = await send_markdown(
+                        event,
+                        dict(item, url=url, width=width, height=height),
+                        retries=self.image_host.retries,
+                        command_prefix=self.qq_command_prefix,
+                    )
+                if sent:
                     event.stop_event()
                     return
             except Exception as exc:
@@ -151,16 +181,17 @@ class DailyFortune(Star):
                     width, height = decoded.size
                 stage = "图床上传"
                 logger.info("今日运势 MD：开始上传，图片 %d 字节", len(data))
-                url = await self.image_host.upload(data, date)
-                stage = "QQ 发送"
-                logger.info("今日运势 MD：图床地址已取得，开始 QQ 发送")
-                if await send_markdown(
-                    event,
-                    {"url": url, "width": width, "height": height},
-                    retries=self.image_host.retries,
-                    fortune=True,
-                    command_prefix=self.qq_command_prefix,
-                ):
+                async with self._hosted(event, data, date) as url:
+                    stage = "QQ 发送"
+                    logger.info("今日运势 MD：图床地址已取得，开始 QQ 发送")
+                    sent = await send_markdown(
+                        event,
+                        {"url": url, "width": width, "height": height},
+                        retries=self.image_host.retries,
+                        fortune=True,
+                        command_prefix=self.qq_command_prefix,
+                    )
+                if sent:
                     event.stop_event()
                     return
             except Exception as exc:
@@ -182,8 +213,40 @@ class DailyFortune(Star):
                 await self._cleanup_task
         try:
             await self.image_host.close()
+            await self.material.close()
         finally:
             await self.service.close()
+
+    # 权限检查先于函数内开关执行；静默跳过非管理员，避免关闭后仍吞掉同名指令。
+    @filter.permission_type(filter.PermissionType.ADMIN, raise_error=False)
+    @filter.command("运势素材库", alias=set(), priority=1)
+    async def material_usage(self, event: AstrMessageEvent, action: str = ""):
+        """仅管理员：查看 QQ 素材库占用；附加「删除缓存」删除本插件素材，「删除全部」清空素材库。"""
+        # 开关关闭时不拦截事件，同名指令可交由其他插件处理。
+        if not self.material_command:
+            return
+        event.should_call_llm(True)
+        action = str(action).strip()
+        if event.get_platform_name() not in QQ_PLATFORMS:
+            text = "运势素材库仅用于查看 QQ 官方机器人的素材库占用。"
+        elif action and action not in {"删除", "删除缓存", "删除全部"}:
+            text = "用法：运势素材库 [删除缓存|删除全部]"
+        else:
+            try:
+                if action:
+                    everything = action == "删除全部"
+                    text = purge_text(await self.material.purge(event, everything), everything)
+                else:
+                    text = usage_text(
+                        await self.material.usage(event),
+                        self.image_host.provider == QQ_MATERIAL,
+                        self.material.cache_minutes,
+                    )
+            except Exception as exc:
+                logger.warning("运势素材库操作失败（%s）：%s", type(exc).__name__, exc)
+                text = describe(exc)
+        yield event.plain_result(text)
+        event.stop_event()
 
     @filter.command("运势原图", alias=set(), priority=1)
     async def fortune_original(self, event: AstrMessageEvent):

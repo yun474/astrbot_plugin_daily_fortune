@@ -10,15 +10,13 @@ from datetime import date as Date, timedelta
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
-import aiohttp
-
 from .avatar import field
+from .qq_api import QQ_SEND_TIMEOUT, QQSendError, qq_request
 from .renderer import ASSETS, build_wife_html
 from .service import markdown_image, normalize_image
 from .settings import number
 
 logger = logging.getLogger("astrbot")
-QQ_SEND_TIMEOUT = 35
 
 
 def parse_catalog(text):
@@ -190,39 +188,14 @@ def payload_for(event, item, fortune=False, command_prefix=""):
             "keyboard": {"content": {"rows": [{"buttons": buttons}]}}}
 
 
-class QQSendError(RuntimeError):
-    def __init__(self, status, data, trace_id):
-        self.code = str(data.get("err_code", data.get("code", "")))
-        super().__init__(f"QQ 发送失败：HTTP {status}，错误码 {self.code or '未知'}："
-                         f"{data.get('message', '无错误描述')}，trace_id={trace_id or '无'}")
-
-
 def image_failure(error):
     """Only definite image-transfer errors are safe to resend."""
     return isinstance(error, QQSendError) and error.code in {"304010", "40034004", "40034141"}
 
 
 async def _request_markdown(http, route, payload):
-    # Reuse botpy's token/session, but retain error codes its response handler drops.
-    await http.check_session()
     route.is_sandbox = http.is_sandbox
-    async with http._session.request(
-        method=route.method, url=route.url, headers=http._headers, json=payload,
-        timeout=aiohttp.ClientTimeout(total=QQ_SEND_TIMEOUT), allow_redirects=False,
-    ) as response:
-        try:
-            result = await response.json(content_type=None)
-        except ValueError:
-            raise RuntimeError(f"QQ 响应不是有效 JSON（HTTP {response.status}），发送结果不明") from None
-        if not isinstance(result, dict):
-            raise RuntimeError(f"QQ 响应不是 JSON 对象（HTTP {response.status}），发送结果不明")
-        code = result.get("err_code", result.get("code"))
-        if not 200 <= response.status < 300 or code not in (None, 0, "0"):
-            trace_id = result.get("trace_id") or response.headers.get("X-Tps-trace-ID")
-            raise QQSendError(response.status, result, trace_id)
-        if not result.get("id"):
-            raise RuntimeError("QQ 未返回消息 ID，发送结果不明")
-        return result
+    return await qq_request(http, route.method, route.url, payload)
 
 
 def supports_markdown(event):
