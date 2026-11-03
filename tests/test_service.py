@@ -6,7 +6,7 @@ import time
 import pytest
 from PIL import Image
 
-from daily_fortune_test.service import FortuneService, default_avatar, normalize_image
+from daily_fortune_test.service import FALLBACK_QUOTES, FortuneService, default_avatar, normalize_image
 
 
 @pytest.mark.asyncio
@@ -95,6 +95,7 @@ async def test_bad_network_data_uses_simple_fallbacks(tmp_path):
     service._download = broken
     quote, background, avatar = await asyncio.gather(service._quote(), service._background(), service._avatar("https://example.com"))
     assert quote[2] == "内置寄语"
+    assert quote[0] in FALLBACK_QUOTES
     assert background[1] == "妖狐图库"
     assert Image.open(io.BytesIO(background[0])).width > 100
     assert Image.open(io.BytesIO(avatar)).size == (128, 128)

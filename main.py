@@ -37,7 +37,7 @@ def markdown_unsent(stage, error):
     "astrbot_plugin_daily_fortune",
     "yun474",
     "今日运势与二次元老婆",
-    "1.0.0",
+    "1.0.1",
     "https://github.com/yun474/astrbot_plugin_daily_fortune",
 )
 class DailyFortune(Star):

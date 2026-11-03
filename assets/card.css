@@ -14,6 +14,9 @@ body{margin:0;background:#efeae6;color:#382f35;font-family:"Microsoft YaHei","No
 .seal{color:#9f485f;font-size:46px;letter-spacing:4px;font-family:"KaiTi","STKaiti",serif;line-height:1.1;white-space:nowrap}
 .fortune-label{font-size:10px;letter-spacing:2px;color:#927173;margin-bottom:5px}
 .tip{font-size:15px;letter-spacing:.3px}
+.score{margin-left:auto;flex:none;text-align:center;color:#9f485f}
+.score b{display:block;font-size:34px;line-height:1;font-weight:600;font-family:Georgia,"Times New Roman",serif}
+.score small{display:block;margin-top:5px;font-size:10px;letter-spacing:2px;color:#927173}
 .advice{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .panel{border-radius:12px;padding:11px 14px;background:rgba(226,237,223,.53);display:grid;grid-template-columns:26px minmax(0,1fr);column-gap:10px;row-gap:10px;align-content:start}
 .panel.bad{background:rgba(239,216,216,.48)}
@@ -47,6 +50,8 @@ body{margin:0;background:#efeae6;color:#382f35;font-family:"Microsoft YaHei","No
 .paper .seal{display:flex;align-items:center;justify-content:center;min-width:100px;height:72px;padding:8px 14px;border:1px solid #b87770;outline:1px solid #d9b6ae;outline-offset:-5px;border-radius:3px;color:#a55852;font-size:39px;letter-spacing:4px;background:#f4e9e1}
 .paper .fortune-label{font-size:10px;color:#a39588;letter-spacing:2.5px;margin-bottom:8px}
 .paper .tip{font-size:17px;letter-spacing:.6px;color:#544a42;line-height:1.5}
+.paper .score{color:#a55852}
+.paper .score small{color:#a39588;letter-spacing:2.5px}
 .paper .advice{gap:26px}
 .paper .panel{padding:0 22px 0 0;border-radius:0;background:none;grid-template-columns:32px minmax(0,1fr);column-gap:14px;row-gap:15px}
 .paper .panel.bad{padding:0 0 0 26px;background:none;border-left:1px solid #e3dbd1;grid-template-columns:32px minmax(0,1fr)}

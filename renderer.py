@@ -35,7 +35,8 @@ def build_html(view: dict, background: bytes, avatar: bytes) -> str:
 <img class="avatar" src="{image_uri(avatar)}" alt="用户头像"><h1>今日运势</h1></div>
 <div class="date">{escape(view['date'].replace('-', '.'))}<small>{weekday}</small></div></header>
 <div class="fortune"><div class="seal">{escape(view['fortune'])}</div><div>
-<div class="fortune-label">你 的 今 日 运 势</div><div class="tip">{escape(view['tip'])}</div></div></div>
+<div class="fortune-label">你 的 今 日 运 势</div><div class="tip">{escape(view['tip'])}</div></div>
+<div class="score"><b>{int(view['score'])}</b><small>运势指数</small></div></div>
 <div class="advice"><section class="panel"><div class="panel-head"><span class="symbol">宜</span></div>{items('good')}</section>
 <section class="panel bad"><div class="panel-head"><span class="symbol">忌</span></div>{items('bad')}</section></div>
 <section class="quote"><div class="quote-title">— 今日一言 —</div>

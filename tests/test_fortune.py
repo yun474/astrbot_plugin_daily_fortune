@@ -3,7 +3,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from daily_fortune_test.avatar import avatar_url
-from daily_fortune_test.fortune import draw
+from daily_fortune_test.fortune import draw, text_result
 from daily_fortune_test.renderer import build_html
 from daily_fortune_test.service import default_avatar
 
@@ -54,3 +54,15 @@ def test_remote_text_cannot_inject_html():
     assert '&lt;script&gt;' in html
     assert "Content-Security-Policy" in html
     assert "收好" not in html and "GOOD TO DO" not in html
+
+
+def test_score_matches_fortune_and_is_shown():
+    for i in range(200):
+        view = draw(f"qq:{i}", "2026-09-29")
+        assert 0 <= view["score"] <= 100
+        expected = "凶" if view["score"] < 15 else "末吉" if view["score"] < 35 else "小吉" if view["score"] < 60 else "中吉" if view["score"] < 85 else "大吉"
+        assert view["fortune"] == expected
+    view = draw("github:yun474", "2026-09-29")
+    view.update(quote="句子", quote_source="来源", quote_credit="一言", background_credit="自定义")
+    assert f"中吉（{view['score']} 分）" in text_result(view)
+    assert f'<div class="score"><b>{view["score"]}</b>' in build_html(view, default_avatar(), default_avatar())

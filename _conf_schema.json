@@ -15,7 +15,7 @@
     "description": "一言接口",
     "type": "string",
     "default": "https://v1.hitokoto.cn/?c=a&c=b&max_length=32",
-    "hint": "兼容一言 JSON 格式，留空使用内置句子。"
+    "hint": "兼容一言 JSON 格式；留空或获取失败时随机使用内置寄语。"
   },
   "browser_executable_path": {
     "description": "Chrome / Chromium 可执行文件路径",
@@ -33,7 +33,7 @@
     "description": "今日老婆图片公网基础地址",
     "type": "string",
     "default": "https://raw.githubusercontent.com/monbed/wife/main/",
-    "hint": "QQ 后台需要能访问此地址；可改为自建图床或镜像，路径须与列表对应。"
+    "hint": "QQ 后台需要能访问此地址；访问 GitHub 较慢时可改为 https://cdn.jsdelivr.net/gh/monbed/wife@main/ 等镜像，路径须与列表对应。"
   },
   "cache_retention_days": {
     "description": "缓存保留天数（包含今天）",

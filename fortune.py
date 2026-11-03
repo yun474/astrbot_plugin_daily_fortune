@@ -60,6 +60,7 @@ def draw(uid: str, date: str) -> dict:
     indexes = sorted(range(len(EVENTS)), key=lambda i: digest(f"event:{i}"))[:4]
     return {
         "date": date,
+        "score": score,
         "fortune": fortune,
         "tip": tip,
         "good": [(EVENTS[i][0], EVENTS[i][1]) for i in indexes[:2]],
@@ -68,7 +69,7 @@ def draw(uid: str, date: str) -> dict:
 
 
 def text_result(view: dict) -> str:
-    lines = [f"{view['date']} 今日运势：{view['fortune']}", view["tip"]]
+    lines = [f"{view['date']} 今日运势：{view['fortune']}（{view['score']} 分）", view["tip"]]
     for key, label in (("good", "宜"), ("bad", "忌")):
         lines.append(f"{label}：" + "；".join(f"{title} · {desc}" for title, desc in view[key]))
     lines.append("仅供娱乐")
