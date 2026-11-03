@@ -23,7 +23,7 @@
 
 ## ✨ 能玩什么
 
-- **今日运势**：用户头像 + 二次元插画 + 吉凶、宜忌与一言，按插画比例自动排版，不显示昵称。
+- **今日运势**：用户头像 + 二次元插画 + 吉凶、运势指数、宜忌与一言，按插画比例自动排版，不显示昵称。
 - **今日老婆**：抽一位角色，展示角色名、所属作品和插画。
 - **每天固定**：按北京时间每日更新，同一平台实例内当天结果不变，重启后仍保留。
 - **QQ MD 模式（可选）**：QQ 官方群聊、私聊可发送 Markdown 图文，附带「今日老婆」「今日运势」快捷按钮，默认使用免配置的 QQ 素材库，开启即可使用。
@@ -149,7 +149,7 @@ Docker 部署请在 AstrBot 容器内安装，并写进自定义镜像，避免�
 | --- | --- | --- |
 | `background_url` | 妖狐二次元图库 | 运势卡背景，填图片直链或本地路径 |
 | `background_credit` | 妖狐图库 | 卡片上的背景来源标注 |
-| `hitokoto_api` | 一言动画、漫画分类 | 一言接口；留空使用内置句子 |
+| `hitokoto_api` | 一言动画、漫画分类 | 一言接口；留空或获取失败时随机使用内置寄语 |
 | `browser_executable_path` | 留空 | Chrome / Chromium 路径；留空使用 Playwright Chromium |
 | `wife_list_url` | `https://animewife.dpdns.org/list.txt` | 今日老婆角色列表 |
 | `wife_image_base` | `https://raw.githubusercontent.com/monbed/wife/main/` | 角色图片的公网基础地址 |
@@ -265,7 +265,18 @@ Docker 部署请在 AstrBot 容器内安装，并写进自定义镜像，避免�
 
 **更换运势背景**：`background_url` 需要直接返回图片，不要填返回 JSON 的接口。本地相对路径以插件目录为基准，例如 `assets/default_background.jpg`。换图时记得同步修改 `background_credit`。
 
-**更换角色图库**：`wife_list_url` 指向纯文本列表，每行一张图片的相对路径，如 `img2/原神!芙宁娜.jpg`。插件从文件名读取作品名和角色名，并拼接到 `wife_image_base` 后获取图片。自建镜像时目录结构需与列表一致。列表默认缓存 24 小时，更换图库不会改变用户当天已抽到的角色。
+**更换角色图库**：`wife_list_url` 指向纯文本列表，每行一张图片的相对路径，如 `img2/原神!芙宁娜.jpg`。插件从文件名读取作品名和角色名，并拼接到 `wife_image_base` 后获取图片。自建镜像时目录结构需与列表一致。列表默认缓存 24 小时，更换图库不会改变用户当天已抽到的角色。列表源暂时无法访问时继续使用上次下载的列表，10 分钟后再尝试刷新。
+
+**角色图片镜像**：默认图库托管在 GitHub，国内服务器下载较慢或失败时，可将 `wife_image_base` 换成下列任一同路径镜像（以实际网络测试为准）：
+
+| 镜像 | `wife_image_base` |
+| --- | --- |
+| GitHub 直连（默认） | `https://raw.githubusercontent.com/monbed/wife/main/` |
+| jsDelivr | `https://cdn.jsdelivr.net/gh/monbed/wife@main/` |
+| jsDelivr Fastly 节点 | `https://fastly.jsdelivr.net/gh/monbed/wife@main/` |
+| jsDmirror | `https://cdn.jsdmirror.com/gh/monbed/wife@main/` |
+
+`wife_list_url` 保持默认即可，列表与图片分开获取。也可以按 [monbed/wife](https://github.com/monbed/wife) 的说明自行部署反代。
 
 ## 🧹 缓存清理
 
@@ -298,7 +309,7 @@ Docker 部署请在 AstrBot 容器内安装，并写进自定义镜像，避免�
 <details>
 <summary>今日老婆 / MD 图片发送失败</summary>
 
-使用 QQ 素材库时，可发送 `运势素材库` 查看额度是否已满，日志中会记录限流或无权限等原因。使用自建图床时，请确认图床上传成功，返回的是公开图片直链而不是预览网页，并且 QQ 服务器能访问它。若机器人下载不了 GitHub 上的角色原图，可以把 `wife_image_base` 换成同路径镜像。
+使用 QQ 素材库时，可发送 `运势素材库` 查看额度是否已满，日志中会记录限流或无权限等原因。使用自建图床时，请确认图床上传成功，返回的是公开图片直链而不是预览网页，并且 QQ 服务器能访问它。若机器人下载不了 GitHub 上的角色原图，可以把 `wife_image_base` 换成同路径镜像，见「自定义图源」中的镜像列表。
 
 失败时日志会标出出错阶段（图床配置、准备图片、压缩图片、图床上传或 QQ 发送），并记录 HTTP 状态、平台错误码和 trace_id，方便排查。失败后保留当天角色，不会重新抽取。若图片只显示「图片」二字，请先核对公开图片地址能否直接打开。
 

@@ -206,3 +206,26 @@ async def test_qq_hung_request_times_out_and_logs(monkeypatch, caplog):
             await send_markdown(event(request), ITEM)
     assert calls == [1]
     assert '开始请求' in caplog.text and '请求超时' in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_failed_catalog_refresh_backs_off(tmp_path):
+    calls = []
+
+    async def download(*args):
+        calls.append(1)
+        raise RuntimeError("list host down")
+
+    service = NS(cache=tmp_path / "cards", config={}, _download=download)
+    wife = WifeService(service)
+    catalog = wife.folder / "catalog.json"
+    catalog.write_text(json.dumps([{"path": "img2/原神!芙宁娜.jpg", "work": "原神", "name": "芙宁娜"}]))
+    stale = time.time() - 48 * 3600
+    os.utime(catalog, (stale, stale))
+    first = await wife.select("user-a", "2026-09-29")
+    second = await wife.select("user-b", "2026-09-29")
+    assert first["name"] == second["name"] == "芙宁娜"
+    assert len(calls) == 1
+    wife._catalog_retry_at = 0.0
+    await wife.select("user-c", "2026-09-29")
+    assert len(calls) == 2

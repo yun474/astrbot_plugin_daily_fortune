@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 import logging
+import random
 import re
 import shutil
 import time
@@ -17,10 +18,36 @@ from .renderer import ASSETS, CardRenderer, build_html
 from .settings import number
 
 logger = logging.getLogger("astrbot")
-FALLBACK_QUOTE = ("把今天过好，就是给明天最好的礼物。", "今日寄语", "内置寄语")
+# 一言接口未配置或获取失败时随机选用，避免所有卡片都是同一句话
+FALLBACK_QUOTES = (
+    "把今天过好，就是给明天最好的礼物。",
+    "慢慢来，好东西都在路上。",
+    "今天也辛苦了，记得对自己温柔一点。",
+    "认真吃饭，好好睡觉，就是了不起的一天。",
+    "风会记得每一朵花的香。",
+    "偶尔停下来，也是在往前走。",
+    "小小的开心，也值得好好收藏。",
+    "你走过的路，都会变成光。",
+    "别着急，月亮也是一点点变圆的。",
+    "今天的努力，明天会悄悄回报你。",
+    "做自己喜欢的事，时间都会变温柔。",
+    "雨停之后，天空会更干净。",
+    "把烦恼折成纸飞机，让它飞远一点。",
+    "保持好奇，世界会一直有趣。",
+    "累了就歇一歇，星星不会跑掉。",
+    "一点点进步，也是进步。",
+    "今天的你，比昨天更懂自己了。",
+    "愿你被这个世界温柔以待。",
+    "心里有光的人，走到哪里都亮堂。",
+    "生活不必完美，开心就很好。",
+)
 MAX_DOWNLOAD = 12 * 1024 * 1024
 # 图库中存在近 4000 万像素的高清插画，上限需留出余量，同时低于 Pillow 自身的解压炸弹阈值
 MAX_PIXELS = 60_000_000
+
+
+def fallback_quote():
+    return random.choice(FALLBACK_QUOTES), "今日寄语", "内置寄语"
 
 
 def _prepare(source, size):
@@ -114,7 +141,7 @@ class FortuneService:
     async def _quote(self):
         url = str(self.config.get("hitokoto_api", ""))
         if not url:
-            return FALLBACK_QUOTE
+            return fallback_quote()
         async with self._quote_lock:
             await asyncio.sleep(max(0, 0.55 - (time.monotonic() - self._last_quote_request)))
             self._last_quote_request = time.monotonic()
@@ -127,7 +154,7 @@ class FortuneService:
                 return text.strip(), f"《{source}》", "一言"
             except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError, TypeError) as exc:
                 logger.warning("今日运势一言获取失败，使用内置句子：%s", type(exc).__name__)
-                return FALLBACK_QUOTE
+                return fallback_quote()
 
     async def _background(self):
         source = str(self.config.get("background_url", "https://acg.yaohud.cn/dm/acg.php"))

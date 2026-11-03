@@ -17,6 +17,7 @@ from .service import markdown_image, normalize_image
 from .settings import number
 
 logger = logging.getLogger("astrbot")
+CATALOG_RETRY = 600  # 角色列表刷新失败后，过这么多秒再重试
 
 
 def parse_catalog(text):
@@ -41,6 +42,7 @@ class WifeService:
         self.folder = service.cache.parent / "wife"
         self.folder.mkdir(exist_ok=True)
         self._lock = asyncio.Lock()
+        self._catalog_retry_at = 0.0
         self.retention_days = number(service.config, "cache_retention_days", 7, 1, 365)
         self.catalog_ttl = number(service.config, "wife_catalog_cache_hours", 24, 1, 168) * 3600
         self._card_revision = hashlib.sha256(
@@ -101,13 +103,20 @@ class WifeService:
                 if saved["day"] == day:
                     return saved
             catalog_file = self.folder / "catalog.json"
-            if not catalog_file.exists() or time.time() - catalog_file.stat().st_mtime > self.catalog_ttl:
+            expired = not catalog_file.exists() or time.time() - catalog_file.stat().st_mtime > self.catalog_ttl
+            if expired and time.monotonic() >= self._catalog_retry_at:
                 url = self.service.config.get("wife_list_url", "https://animewife.dpdns.org/list.txt")
                 try:
                     catalog = parse_catalog((await self.service._download(url, 2 * 1024 * 1024)).decode("utf-8-sig"))
-                except Exception:
+                except Exception as exc:
                     if not catalog_file.exists():
                         raise
+                    # 列表源不可用时暂用旧列表，并推迟下次刷新，避免每次抽取都排队等待超时。
+                    self._catalog_retry_at = time.monotonic() + CATALOG_RETRY
+                    logger.warning(
+                        "今日老婆角色列表刷新失败，暂用旧列表，%d 分钟后重试：%s",
+                        CATALOG_RETRY // 60, type(exc).__name__,
+                    )
                     catalog = json.loads(catalog_file.read_text("utf-8"))
                 else:
                     self._save(catalog_file, catalog)
